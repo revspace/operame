@@ -148,7 +148,7 @@ void setup() {
     co2_blink     = WiFiSettings.integer("operame_co2_blink",   800, 5000, 800, "Knipperen vanaf [ppm]");
 
     WiFiSettings.heading("MQTT");
-    mqtt_enabled  = WiFiSettings.checkbox("operama_mqtt", false, "Metingen via het MQTT-protocol versturen") && wifi_enabled;
+    mqtt_enabled  = WiFiSettings.checkbox("operame_mqtt", false, "Metingen via het MQTT-protocol versturen") && wifi_enabled;
     String server = WiFiSettings.string("mqtt_server", 64, "", "Broker");
     int port      = WiFiSettings.integer("mqtt_port", 0, 65535, 1883, "Broker TCP-poort");
     max_failures  = WiFiSettings.integer("operame_max_failures", 0, 1000, 10, "Aantal verbindingsfouten voor automatische herstart");
