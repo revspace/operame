@@ -130,6 +130,12 @@ void setup() {
     display.setRotation(1);
     sprite.createSprite(display.width(), display.height());
 
+    pinMode(12, INPUT_PULLUP);
+    while (digitalRead(12)) {
+        display_big("module verkeerd om!", TFT_RED);
+        delay(1000);
+    }
+
     hwserial1.begin(9600, SERIAL_8N1, 22, 21);
     mhz.begin(hwserial1);
     display_big("operame");
