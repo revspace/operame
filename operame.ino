@@ -136,7 +136,7 @@ void setup() {
         delay(1000);
     }
 
-    hwserial1.begin(9600, SERIAL_8N1, 22, 21);
+    hwserial1.begin(9600, SERIAL_8N1, 27, 26);
     mhz.begin(hwserial1);
     display_big("operame");
     delay(1000); 
