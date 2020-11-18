@@ -214,8 +214,8 @@ void check_sensor() {
 }
 
 void loop() {
-    unsigned long next = millis() + 6000;
-    static unsigned long next_mqtt = 0;
+    static unsigned long previous_mqtt = 0;
+    unsigned long start = millis();
 
     if (mqtt_enabled) mqtt.loop();
 
@@ -227,18 +227,18 @@ void loop() {
     if (CO2) {
         display_ppm(CO2);
 
-        if (mqtt_enabled && millis() > next_mqtt) {
+        if (mqtt_enabled && millis() - previous_mqtt >= mqtt_interval) {
+            previous_mqtt = millis();
             connect_mqtt();
             String message = mqtt_template;
             message.replace("{}", String(CO2));
             retain(mqtt_topic, message);
-            next_mqtt = millis() + mqtt_interval;
         }
     } else {
         display_big("wacht...");
     }
 
-    while (millis() < next) {
+    while (millis() - start < 6000) {
         if (CO2) display_ppm(CO2);  // repeat, for blinking
         if (ota_enabled) ArduinoOTA.handle();
         check_buttons();
