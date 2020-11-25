@@ -7,6 +7,7 @@
 #include <ArduinoOTA.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
+#include <logo.h>
 #include <list>
 
 using namespace std;
@@ -55,6 +56,15 @@ void display_big(const String& text, int fg = TFT_WHITE, int bg = TFT_BLACK) {
     sprite.pushSprite(0, 0);
 }
 
+void display_logo() {
+    sprite.setSwapBytes(true);
+    sprite.fillSprite(TFT_BLACK);
+    sprite.pushImage(12, 30, 215, 76, OPERAME_LOGO);
+    if (WiFi.status() == WL_CONNECTED)
+        sprite.drawRect(0, 0, display.width(), display.height(), TFT_BLUE);
+
+    sprite.pushSprite(0, 0);
+}
 
 void setup_ota() {
     ArduinoOTA.setHostname(WiFiSettings.hostname.c_str());
@@ -110,10 +120,14 @@ void display_ppm(int ppm) {
 void ppm_demo() {
     display_big("demo!");
     delay(3000);
+    display_logo();
+    delay(1000);
     for (int p = 400; p < 1200; p++) {
         display_ppm(p);
         delay(30);
     }
+    display_logo();
+    delay(5000);
 }
 
 void setup() {
@@ -138,8 +152,10 @@ void setup() {
 
     hwserial1.begin(9600, SERIAL_8N1, 27, 26);
     mhz.begin(hwserial1);
-    display_big("operame");
-    delay(1000); 
+
+    display_logo();
+    delay(2000); 
+
     check_sensor();
     mhz.setFilter(true, true);
     mhz.autoCalibration();
