@@ -20,6 +20,8 @@ int co2_warning;
 int co2_critical;
 int co2_blink;
 
+int co2_init = 410;  // magic value reported while initializing
+
 MQTTClient mqtt;
 HardwareSerial hwserial1(1);
 TFT_eSPI display;
@@ -157,8 +159,14 @@ void setup() {
     delay(2000); 
 
     check_sensor();
-    mhz.setFilter(true, true);
-    mhz.autoCalibration();
+
+    // mhz.setFilter(true, true);  Library filter doesn't handle 0436
+    mhz.autoCalibration(true);
+    char v[5];
+    mhz.getVersion(v);
+    v[4] = '\0';
+    if (strcmp("0436", v) == 0) co2_init = 436;
+    Serial.printf("MH-Z19 firmware version %s\n", v);
 
     WiFiSettings.hostname = "operame-";
     wifi_enabled  = WiFiSettings.checkbox("operame_wifi", false, "WiFi-verbinding gebruiken");
@@ -205,6 +213,7 @@ void setup() {
     if (ota_enabled) setup_ota();
 
     display_big(":-)");
+
 }
 
 void connect_mqtt() {
@@ -235,12 +244,24 @@ void loop() {
 
     if (mqtt_enabled) mqtt.loop();
 
-    int CO2 = mhz.getCO2();
+    int CO2   = mhz.getCO2();
+    int unclamped = mhz.getCO2(false);
+
+    // reimplement filter from library, but also checking for 436 because our
+    // sensors (firmware 0436, coincidence?) return that instead of 410...
+    if (unclamped == co2_init && CO2 - unclamped >= 10) CO2 = 0;
+
+    // No known sensors support >10k PPM (library filter tests for >32767)
+    if (CO2 > 10000 || unclamped > 10000) CO2 = 0;
+
     check_sensor();
 
     Serial.println(CO2);
 
     if (CO2) {
+        // some MH-Z19's go to 10000 but the display has space for 4 digits
+        if (CO2 > 9999) CO2 = 9999;
+
         display_ppm(CO2);
 
         if (mqtt_enabled && millis() - previous_mqtt >= mqtt_interval) {
