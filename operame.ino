@@ -8,7 +8,8 @@
 #include <SPI.h>
 #include <TFT_eSPI.h>
 #include <logo.h>
-#include <list>
+#include <deque>
+#include <algorithm>
 
 using namespace std;
 
@@ -19,6 +20,8 @@ bool ota_enabled;
 int co2_warning;
 int co2_critical;
 int co2_blink;
+int co2_baseline = 420;
+const int co2_assumed = 420;
 
 int co2_init = 410;  // magic value reported while initializing
 
@@ -33,6 +36,24 @@ bool add_units;
 bool wifi_enabled;
 bool mqtt_enabled;
 int max_failures;
+
+deque<int> history;
+int max_history = 8 * 24 * (60 / 5);
+
+String slurp(const String& fn) {
+    File f = SPIFFS.open(fn, "r");
+    String r = f.readString();
+    f.close();
+    return r;
+}
+
+bool spurt(const String& fn, const String& content) {
+    File f = SPIFFS.open(fn, "w");
+    if (!f) return false;
+    auto w = f.print(content);
+    f.close();
+    return w == content.length();
+}
 
 void retain(String topic, String message) {
     Serial.printf("%s %s\n", topic.c_str(), message.c_str());
@@ -159,9 +180,9 @@ void setup() {
     delay(2000); 
 
     check_sensor();
+    mhz.autoCalibration(false);  // ours works better
 
     // mhz.setFilter(true, true);  Library filter doesn't handle 0436
-    mhz.autoCalibration(true);
     char v[5];
     mhz.getVersion(v);
     v[4] = '\0';
@@ -214,6 +235,9 @@ void setup() {
 
     display_big(":-)");
 
+    co2_baseline = slurp("/operame_baseline").toInt();
+    if (!co2_baseline) co2_baseline = co2_assumed;
+    Serial.printf("Initial CO2 baseline: %d PPM.\n", co2_baseline);
 }
 
 void connect_mqtt() {
@@ -238,6 +262,29 @@ void check_sensor() {
     }
 }
 
+void abc() {
+    const int window = 3; // TODO make 10
+    if (history.size() < window) return;
+
+    int lowest = 99999;
+    auto begin = history.begin();
+    auto end = history.end() - window;
+    for (auto it = begin; it != end; ++it) {
+        auto wend = it + window;
+        auto minmax = std::minmax_element(it, wend);
+        if (abs(*minmax.first - *minmax.second) > 50) continue;
+        int sum = 0;
+        for (auto sit = it; sit != wend; ++sit) sum += *sit;
+        int avg = sum / window;
+        if (avg < lowest) lowest = avg;
+    }
+    if (lowest != 99999 && lowest != co2_baseline) {
+        co2_baseline = lowest;
+        Serial.printf("New CO2 baseline: %d PPM.\n", co2_baseline);;
+        spurt("/operame_baseline", String(co2_baseline));
+    }
+}
+
 void loop() {
     static unsigned long previous_mqtt = 0;
     unsigned long start = millis();
@@ -257,6 +304,17 @@ void loop() {
     check_sensor();
 
     Serial.println(CO2);
+
+    static unsigned long previous_history;
+    // TODO change 5 to minutes
+    if (millis() - previous_history >= 1 * 60 * 1000) {
+        history.push_back(CO2);
+        if (history.size() > max_history) history.pop_front();
+        previous_history = millis();
+    }
+
+    abc();
+    CO2 += co2_assumed - co2_baseline;
 
     if (CO2) {
         // some MH-Z19's go to 10000 but the display has space for 4 digits
@@ -281,5 +339,6 @@ void loop() {
         check_buttons();
         delay(20);
     }
+
     Serial.println(esp_get_free_heap_size());
 }
