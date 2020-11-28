@@ -244,7 +244,7 @@ void connect_mqtt() {
     if (mqtt.connected()) return;  // already/still connected
 
     static int failures = 0;
-    if (mqtt.connect(WiFiSettings.hostname.c_str())) {
+    if (WiFi.status() == WL_CONNECTED && mqtt.connect(WiFiSettings.hostname.c_str())) {
         failures = 0;
     } else {
         failures++;
