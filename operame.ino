@@ -17,13 +17,17 @@ unsigned long mqtt_interval;
 const int portalbutton = 35;
 const int demobutton = 0;
 bool ota_enabled;
-int co2_warning;
-int co2_critical;
-int co2_blink;
-int co2_baseline = 420;
-const int co2_assumed = 420;
+int co2_warning;                   // [PPM]
+int co2_critical;                  // [PPM]
+int co2_blink;                     // [PPM]
+int co2_baseline;                  // set by ABC [PPM]
+const int tick = 5000;             // duration of one loop() iteration [ms]
+const int co2_assumed = 420;       // outdoor PPM [PPM]
+const int co2_window = 2*60*1000;  // for moving average [ms]
+const int co2_size = co2_window / tick;
+deque<int> co2_history;
 
-int co2_init = 410;  // magic value reported while initializing
+int co2_init = 410;  // magic value reported by sensor during startup
 
 MQTTClient mqtt;
 HardwareSerial hwserial1(1);
@@ -37,8 +41,12 @@ bool wifi_enabled;
 bool mqtt_enabled;
 int max_failures;
 
-deque<int> history;
-int max_history = 8 * 24 * (60 / 5);
+deque<int> abc_history;
+const int abc_maxdev = 50;  // max. deviation to consider a straight line [PPM]
+const int abc_window = 12;           // number of samples for moving window
+const int abc_interval = 5*60*1000;  // sample interval [ms]
+const int abc_minchange = 10;        // don't do tiny updates [PPM]
+int abc_size = 8 * 24 * (60 / 5);    // number of samples
 
 String slurp(const String& fn) {
     File f = SPIFFS.open(fn, "r");
@@ -202,7 +210,7 @@ void setup() {
     mqtt_enabled  = WiFiSettings.checkbox("operame_mqtt", false, "Metingen via het MQTT-protocol versturen") && wifi_enabled;
     String server = WiFiSettings.string("mqtt_server", 64, "", "Broker");
     int port      = WiFiSettings.integer("mqtt_port", 0, 65535, 1883, "Broker TCP-poort");
-    max_failures  = WiFiSettings.integer("operame_max_failures", 0, 1000, 10, "Aantal verbindingsfouten voor automatische herstart");
+    max_failures  = WiFiSettings.integer("operame_max_failures", 0, 1000, 100, "Aantal verbindingsfouten voor automatische herstart (0 = nooit)");
     mqtt_topic  = WiFiSettings.string("operame_mqtt_topic", WiFiSettings.hostname, "Topic");
     mqtt_interval = 1000UL * WiFiSettings.integer("operame_mqtt_interval", 10, 3600, 60, "Publicatie-interval [s]");
     mqtt_template = WiFiSettings.string("operame_mqtt_template", "{} PPM", "Berichtsjabloon");
@@ -236,7 +244,12 @@ void setup() {
     display_big(":-)");
 
     co2_baseline = slurp("/operame_baseline").toInt();
-    if (!co2_baseline) co2_baseline = co2_assumed;
+    if (co2_baseline) {
+        // Populate ABC so future "lowest" has to compete with existing baseline
+        for (int i=0; i < abc_window; i++) abc_history.push_back(co2_baseline);
+    } else {
+        co2_baseline = co2_assumed;
+    }
     Serial.printf("Initial CO2 baseline: %d PPM.\n", co2_baseline);
 }
 
@@ -248,7 +261,7 @@ void connect_mqtt() {
         failures = 0;
     } else {
         failures++;
-        if (failures >= max_failures) ESP.restart();
+        if (max_failures && failures >= max_failures) ESP.restart();
     }
 }
 
@@ -263,35 +276,42 @@ void check_sensor() {
 }
 
 void abc() {
-    const int window = 3; // TODO make 10
-    if (history.size() < window) return;
+    if (abc_history.size() < abc_window) return;
 
     int lowest = 99999;
-    auto begin = history.begin();
-    auto end = history.end() - window;
+    auto begin = abc_history.begin();
+    auto end = abc_history.end() - abc_window;
     for (auto it = begin; it != end; ++it) {
-        auto wend = it + window;
+        auto wend = it + abc_window;
         auto minmax = std::minmax_element(it, wend);
-        if (abs(*minmax.first - *minmax.second) > 50) continue;
+        if (abs(*minmax.first - *minmax.second) > abc_maxdev) continue;
         int sum = 0;
         for (auto sit = it; sit != wend; ++sit) sum += *sit;
-        int avg = sum / window;
+        int avg = sum / abc_window;
         if (avg < lowest) lowest = avg;
     }
-    if (lowest != 99999 && lowest != co2_baseline) {
+    if (lowest != 99999  // whether a straight line has been found at all
+        && abs(co2_baseline - lowest) >= abc_minchange
+    ) {
         co2_baseline = lowest;
-        Serial.printf("New CO2 baseline: %d PPM.\n", co2_baseline);;
+        Serial.printf("New CO2 baseline: %d PPM.\n", co2_baseline);
         spurt("/operame_baseline", String(co2_baseline));
     }
 }
 
+int moving_average() {
+    int sum = 0;
+    auto end = co2_history.end();
+    for (auto it = co2_history.begin(); it != end; ++it) sum += *it;
+    return sum / co2_history.size();
+}
+
 void loop() {
-    static unsigned long previous_mqtt = 0;
     unsigned long start = millis();
 
     if (mqtt_enabled) mqtt.loop();
 
-    int CO2   = mhz.getCO2();
+    int CO2       = mhz.getCO2();
     int unclamped = mhz.getCO2(false);
 
     // reimplement filter from library, but also checking for 436 because our
@@ -303,37 +323,54 @@ void loop() {
 
     check_sensor();
 
-    Serial.println(CO2);
-
-    static unsigned long previous_history;
-    // TODO change 5 to minutes
-    if (millis() - previous_history >= 1 * 60 * 1000) {
-        history.push_back(CO2);
-        if (history.size() > max_history) history.pop_front();
-        previous_history = millis();
-    }
-
-    abc();
-    CO2 += co2_assumed - co2_baseline;
-
     if (CO2) {
+        // Moving average
+        if (co2_history.size() == co2_size) co2_history.pop_front();
+        co2_history.push_back(CO2);
+        int smoothed = moving_average();
+
+        // Automatic Baseline Calibration
+        static unsigned long previous_abc = 0;
+        if (millis() - previous_abc >= abc_interval) {
+            previous_abc = millis();
+            if (abc_history.size() == abc_size) abc_history.pop_front();
+            abc_history.push_back(CO2);
+        }
+        abc();
+
+        // Apply ABC
+        int display_co2 = smoothed + co2_assumed - co2_baseline;
+        int current_co2 = CO2      + co2_assumed - co2_baseline;
+
         // some MH-Z19's go to 10000 but the display has space for 4 digits
-        if (CO2 > 9999) CO2 = 9999;
+        if (display_co2 > 9999) CO2 = 9999;
 
-        display_ppm(CO2);
+        Serial.printf(
+            "%d %s %d = %d; moving average based on %d samples is %d PPM.\n",
+            CO2,
+            (current_co2 > CO2 ? "+" : "-"),
+            abs(co2_assumed - co2_baseline),
+            current_co2,
+            co2_history.size(),
+            display_co2
+        );
+        display_ppm(display_co2);
 
+        static unsigned long previous_mqtt = 0;
         if (mqtt_enabled && millis() - previous_mqtt >= mqtt_interval) {
             previous_mqtt = millis();
             connect_mqtt();
             String message = mqtt_template;
-            message.replace("{}", String(CO2));
+            message.replace("{}", String(display_co2));
             retain(mqtt_topic, message);
         }
+
+        CO2 = display_co2;  // for repeated displaying
     } else {
         display_big("wacht...");
     }
 
-    while (millis() - start < 6000) {
+    while (millis() - start < tick) {
         if (CO2) display_ppm(CO2);  // repeat, for blinking
         if (ota_enabled) ArduinoOTA.handle();
         check_buttons();
