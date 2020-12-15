@@ -3,7 +3,7 @@
 #include <MQTT.h>
 #include <SPIFFS.h>
 #include <WiFiSettings.h>
-#include <MHZ19.h>
+//#include <MHZ19.h>
 #include <ArduinoOTA.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
@@ -26,7 +26,7 @@ MQTTClient mqtt;
 HardwareSerial hwserial1(1);
 TFT_eSPI display;
 TFT_eSprite sprite(&display);
-MHZ19 mhz;
+//MHZ19 mhz;
 String mqtt_topic;
 String mqtt_template;
 bool add_units;
@@ -153,20 +153,68 @@ void setup() {
     }
 
     hwserial1.begin(9600, SERIAL_8N1, 27, 26);
-    mhz.begin(hwserial1);
+
+/*
+
+// senseair?
+//    hwserial1.print("\xfe\x41\0\x80\x01\x10\x28\x7e");
+//    delay(1000);
+//    hwserial1.print("\xfe\x44\0\0\x08\x20\x79\x3c");
+// nope
+
+// HCC-ding?
+    hwserial1.print("\x5c\x01\xc5\0\0\0\0\0\xDD");
+// nope
+
+// zelfde protocol maar dan anders?
+    uint8_t p[9];
+    p[1] = 0x01;
+    p[2] = 0xc5;
+
+while (1) {
+    for (int i = 255; i < 256; i++) {
+        p[0] = i;
+        int sum = 0;
+        for (int c = 0; c < 8; c++) {
+            Serial.print(p[c], HEX);
+            Serial.print(" ");
+            sum += p[c];
+        }
+        p[8] = 255 - (sum % 256);
+        Serial.println(p[8], HEX);
+        hwserial1.write(p, 9);
+        delay(50);
+        if (hwserial1.available()) {
+            Serial.println("JAAAAAAAAAAAAAAAAAAAA");
+            while (hwserial1.available()) {
+                int c = hwserial1.read();
+                if (c != -1) Serial.println(c, HEX);
+            }
+        }
+        delay(1000);
+    }
+}
+
+    while (1) {
+        int c = hwserial1.read();
+        if (c != -1) Serial.println(c, HEX);
+    }
+
+*/
+    //mhz.begin(hwserial1);
 
     display_logo();
     delay(2000); 
 
-    check_sensor();
+    //check_sensor();
 
-    // mhz.setFilter(true, true);  Library filter doesn't handle 0436
-    mhz.autoCalibration(true);
-    char v[5];
-    mhz.getVersion(v);
-    v[4] = '\0';
-    if (strcmp("0436", v) == 0) co2_init = 436;
-    Serial.printf("MH-Z19 firmware version %s\n", v);
+    //// mhz.setFilter(true, true);  Library filter doesn't handle 0436
+    //mhz.autoCalibration(true);
+    //char v[5];
+    //mhz.getVersion(v);
+    //v[4] = '\0';
+    //if (strcmp("0436", v) == 0) co2_init = 436;
+    //Serial.printf("MH-Z19 firmware version %s\n", v);
 
     WiFiSettings.hostname = "operame-";
     wifi_enabled  = WiFiSettings.checkbox("operame_wifi", false, "WiFi-verbinding gebruiken");
@@ -229,6 +277,7 @@ void connect_mqtt() {
 }
 
 void check_sensor() {
+    /*
     if (mhz.errorCode == RESULT_OK) return;
     while (1) {
         delay(1000);
@@ -236,6 +285,26 @@ void check_sensor() {
         if (mhz.errorCode == RESULT_OK) return;
         display_big("sensorfout", TFT_RED);
     }
+    */
+}
+
+int get_co2() {
+    const uint8_t command[9] = { 0xff, 0x01, 0xc5, 0, 0, 0, 0, 0, 0x3a };
+    hwserial1.write(command, sizeof(command));
+    delay(50);
+    char response[9];
+    if (hwserial1.available()) {
+        while (hwserial1.available()) {
+            int c = hwserial1.readBytes(response, sizeof(response));
+            if (c != sizeof(response)) return 0;
+        }
+    }
+    uint8_t checksum = 255;
+    for (int i = 0; i < sizeof(response) - 1; i++) {
+        checksum -= response[i];
+    }
+    if (response[8] != checksum) return 0;
+    return response[2] * 256 + response[3];
 }
 
 void loop() {
@@ -244,17 +313,12 @@ void loop() {
 
     if (mqtt_enabled) mqtt.loop();
 
-    int CO2   = mhz.getCO2();
-    int unclamped = mhz.getCO2(false);
-
-    // reimplement filter from library, but also checking for 436 because our
-    // sensors (firmware 0436, coincidence?) return that instead of 410...
-    if (unclamped == co2_init && CO2 - unclamped >= 10) CO2 = 0;
+    int CO2   = get_co2();
 
     // No known sensors support >10k PPM (library filter tests for >32767)
-    if (CO2 > 10000 || unclamped > 10000) CO2 = 0;
+//    if (CO2 > 10000 || unclamped > 10000) CO2 = 0;
 
-    check_sensor();
+//    check_sensor();
 
     Serial.println(CO2);
 
