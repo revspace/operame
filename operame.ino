@@ -250,7 +250,6 @@ int aqc_get_co2() {
         }
         uint8_t checksum = 255;
         for (int i = 0; i < sizeof(response) - 1; i++) {
-            Serial.printf("%02x %d\n", response[i], response[i]);
             checksum -= response[i];
         }
         if (response[8] == checksum) {
