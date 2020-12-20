@@ -3,7 +3,7 @@
 #include <MQTT.h>
 #include <SPIFFS.h>
 #include <WiFiSettings.h>
-//#include <MHZ19.h>
+#include <MHZ19.h>
 #include <ArduinoOTA.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
@@ -20,13 +20,16 @@ int co2_warning;
 int co2_critical;
 int co2_blink;
 
-int co2_init = 410;  // magic value reported while initializing
+enum Driver { AQC, MHZ };
+Driver driver;
+
+int mhz_co2_init = 410;  // magic value reported while initializing
 
 MQTTClient mqtt;
 HardwareSerial hwserial1(1);
 TFT_eSPI display;
 TFT_eSprite sprite(&display);
-//MHZ19 mhz;
+MHZ19 mhz;
 String mqtt_topic;
 String mqtt_template;
 bool add_units;
@@ -154,67 +157,18 @@ void setup() {
 
     hwserial1.begin(9600, SERIAL_8N1, 27, 26);
 
-/*
-
-// senseair?
-//    hwserial1.print("\xfe\x41\0\x80\x01\x10\x28\x7e");
-//    delay(1000);
-//    hwserial1.print("\xfe\x44\0\0\x08\x20\x79\x3c");
-// nope
-
-// HCC-ding?
-    hwserial1.print("\x5c\x01\xc5\0\0\0\0\0\xDD");
-// nope
-
-// zelfde protocol maar dan anders?
-    uint8_t p[9];
-    p[1] = 0x01;
-    p[2] = 0xc5;
-
-while (1) {
-    for (int i = 255; i < 256; i++) {
-        p[0] = i;
-        int sum = 0;
-        for (int c = 0; c < 8; c++) {
-            Serial.print(p[c], HEX);
-            Serial.print(" ");
-            sum += p[c];
-        }
-        p[8] = 255 - (sum % 256);
-        Serial.println(p[8], HEX);
-        hwserial1.write(p, 9);
-        delay(50);
-        if (hwserial1.available()) {
-            Serial.println("JAAAAAAAAAAAAAAAAAAAA");
-            while (hwserial1.available()) {
-                int c = hwserial1.read();
-                if (c != -1) Serial.println(c, HEX);
-            }
-        }
-        delay(1000);
+    if (aqc_get_co2() >= 0) {
+        driver = AQC;
+        hwserial1.setTimeout(100);
+        Serial.println("Using AQC driver.");
+    } else {
+        driver = MHZ;
+        mhz_setup();
+        Serial.println("Using MHZ driver.");
     }
-}
-
-    while (1) {
-        int c = hwserial1.read();
-        if (c != -1) Serial.println(c, HEX);
-    }
-
-*/
-    //mhz.begin(hwserial1);
 
     display_logo();
     delay(2000); 
-
-    //check_sensor();
-
-    //// mhz.setFilter(true, true);  Library filter doesn't handle 0436
-    //mhz.autoCalibration(true);
-    //char v[5];
-    //mhz.getVersion(v);
-    //v[4] = '\0';
-    //if (strcmp("0436", v) == 0) co2_init = 436;
-    //Serial.printf("MH-Z19 firmware version %s\n", v);
 
     WiFiSettings.hostname = "operame-";
     wifi_enabled  = WiFiSettings.checkbox("operame_wifi", false, "WiFi-verbinding gebruiken");
@@ -276,35 +230,83 @@ void connect_mqtt() {
     }
 }
 
-void check_sensor() {
-    /*
-    if (mhz.errorCode == RESULT_OK) return;
-    while (1) {
-        delay(1000);
-        mhz.verify();
-        if (mhz.errorCode == RESULT_OK) return;
-        display_big("sensorfout", TFT_RED);
+int aqc_get_co2() {
+    static bool initialized = false;
+
+    const uint8_t command[9] = { 0xff, 0x01, 0xc5, 0, 0, 0, 0, 0, 0x3a };
+    char response[9];
+    int CO2 = -1;
+
+    for (int attempt = 0; attempt < 3; attempt++) {
+        hwserial1.flush();
+        int limit = 20;  // .available() sometimes stays true
+        while(hwserial1.available() && --limit) hwserial1.read();
+
+        hwserial1.write(command, sizeof(command));
+        delay(50);
+        int c = hwserial1.readBytes(response, sizeof(response));
+        if (c != sizeof(response)) {
+            continue;
+        }
+        uint8_t checksum = 255;
+        for (int i = 0; i < sizeof(response) - 1; i++) {
+            Serial.printf("%02x %d\n", response[i], response[i]);
+            checksum -= response[i];
+        }
+        if (response[8] == checksum) {
+            CO2 = response[2] * 256 + response[3];
+            break;
+        }
+        delay(50);
     }
-    */
+
+    if (CO2 < 0) {
+        initialized = false;
+        return CO2;
+    }
+
+    if (!initialized && (CO2 == 9999 || CO2 == 400)) return 0;
+    initialized = true;
+    return CO2;
+}
+
+void mhz_setup() {
+    mhz.begin(hwserial1);
+    // mhz.setFilter(true, true);  Library filter doesn't handle 0436
+    mhz.autoCalibration(true);
+    char v[5];
+    mhz.getVersion(v);
+    v[4] = '\0';
+    if (strcmp("0436", v) == 0) mhz_co2_init = 436;
+}
+
+int mhz_get_co2() {
+    int CO2       = mhz.getCO2();
+    int unclamped = mhz.getCO2(false);
+
+    if (mhz.errorCode != RESULT_OK) {
+        delay(500);
+        mhz_setup();
+        return -1;
+    }
+
+    // reimplement filter from library, but also checking for 436 because our
+    // sensors (firmware 0436, coincidence?) return that instead of 410...
+    if (unclamped == mhz_co2_init && CO2 - unclamped >= 10) return 0;
+
+    // No known sensors support >10k PPM (library filter tests for >32767)
+    if (CO2 > 10000 || unclamped > 10000) return 0;
+
+    return CO2;
 }
 
 int get_co2() {
-    const uint8_t command[9] = { 0xff, 0x01, 0xc5, 0, 0, 0, 0, 0, 0x3a };
-    hwserial1.write(command, sizeof(command));
-    delay(50);
-    char response[9];
-    if (hwserial1.available()) {
-        while (hwserial1.available()) {
-            int c = hwserial1.readBytes(response, sizeof(response));
-            if (c != sizeof(response)) return 0;
-        }
-    }
-    uint8_t checksum = 255;
-    for (int i = 0; i < sizeof(response) - 1; i++) {
-        checksum -= response[i];
-    }
-    if (response[8] != checksum) return 0;
-    return response[2] * 256 + response[3];
+    if (driver == AQC) return aqc_get_co2();
+    if (driver == MHZ) return mhz_get_co2();
+
+    // Should be unreachable
+    ESP.restart();
+    return -1;  // suppress warning
 }
 
 void loop() {
@@ -313,16 +315,16 @@ void loop() {
 
     if (mqtt_enabled) mqtt.loop();
 
-    int CO2   = get_co2();
+    int CO2 = get_co2();
 
-    // No known sensors support >10k PPM (library filter tests for >32767)
-//    if (CO2 > 10000 || unclamped > 10000) CO2 = 0;
-
-//    check_sensor();
-
-    Serial.println(CO2);
-
-    if (CO2) {
+    if (CO2 < 0) {
+        display_big("sensorfout", TFT_RED);
+    }
+    else if (CO2 == 0) {
+        display_big("wacht...");
+    }
+    else {
+        Serial.println(CO2);
         // some MH-Z19's go to 10000 but the display has space for 4 digits
         if (CO2 > 9999) CO2 = 9999;
 
@@ -335,15 +337,12 @@ void loop() {
             message.replace("{}", String(CO2));
             retain(mqtt_topic, message);
         }
-    } else {
-        display_big("wacht...");
     }
 
     while (millis() - start < 6000) {
-        if (CO2) display_ppm(CO2);  // repeat, for blinking
+        if (CO2 > 0) display_ppm(CO2);  // repeat, for blinking
         if (ota_enabled) ArduinoOTA.handle();
         check_buttons();
         delay(20);
     }
-    Serial.println(esp_get_free_heap_size());
 }
