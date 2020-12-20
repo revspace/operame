@@ -235,7 +235,7 @@ int aqc_get_co2() {
 
     const uint8_t command[9] = { 0xff, 0x01, 0xc5, 0, 0, 0, 0, 0, 0x3a };
     char response[9];
-    int CO2 = -1;
+    int co2 = -1;
 
     for (int attempt = 0; attempt < 3; attempt++) {
         hwserial1.flush();
@@ -253,20 +253,20 @@ int aqc_get_co2() {
             checksum -= response[i];
         }
         if (response[8] == checksum) {
-            CO2 = response[2] * 256 + response[3];
+            co2 = response[2] * 256 + response[3];
             break;
         }
         delay(50);
     }
 
-    if (CO2 < 0) {
+    if (co2 < 0) {
         initialized = false;
-        return CO2;
+        return co2;
     }
 
-    if (!initialized && (CO2 == 9999 || CO2 == 400)) return 0;
+    if (!initialized && (co2 == 9999 || co2 == 400)) return 0;
     initialized = true;
-    return CO2;
+    return co2;
 }
 
 void mhz_setup() {
@@ -280,7 +280,7 @@ void mhz_setup() {
 }
 
 int mhz_get_co2() {
-    int CO2       = mhz.getCO2();
+    int co2       = mhz.getCO2();
     int unclamped = mhz.getCO2(false);
 
     if (mhz.errorCode != RESULT_OK) {
@@ -291,12 +291,12 @@ int mhz_get_co2() {
 
     // reimplement filter from library, but also checking for 436 because our
     // sensors (firmware 0436, coincidence?) return that instead of 410...
-    if (unclamped == mhz_co2_init && CO2 - unclamped >= 10) return 0;
+    if (unclamped == mhz_co2_init && co2 - unclamped >= 10) return 0;
 
     // No known sensors support >10k PPM (library filter tests for >32767)
-    if (CO2 > 10000 || unclamped > 10000) return 0;
+    if (co2 > 10000 || unclamped > 10000) return 0;
 
-    return CO2;
+    return co2;
 }
 
 int get_co2() {
@@ -314,32 +314,32 @@ void loop() {
 
     if (mqtt_enabled) mqtt.loop();
 
-    int CO2 = get_co2();
+    int co2 = get_co2();
 
-    if (CO2 < 0) {
+    if (co2 < 0) {
         display_big("sensorfout", TFT_RED);
     }
-    else if (CO2 == 0) {
+    else if (co2 == 0) {
         display_big("wacht...");
     }
     else {
-        Serial.println(CO2);
+        Serial.println(co2);
         // some MH-Z19's go to 10000 but the display has space for 4 digits
-        if (CO2 > 9999) CO2 = 9999;
+        if (co2 > 9999) co2 = 9999;
 
-        display_ppm(CO2);
+        display_ppm(co2);
 
         if (mqtt_enabled && millis() - previous_mqtt >= mqtt_interval) {
             previous_mqtt = millis();
             connect_mqtt();
             String message = mqtt_template;
-            message.replace("{}", String(CO2));
+            message.replace("{}", String(co2));
             retain(mqtt_topic, message);
         }
     }
 
     while (millis() - start < 6000) {
-        if (CO2 > 0) display_ppm(CO2);  // repeat, for blinking
+        if (co2 > 0) display_ppm(co2);  // repeat, for blinking
         if (ota_enabled) ArduinoOTA.handle();
         check_buttons();
         delay(20);
