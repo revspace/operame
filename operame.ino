@@ -143,6 +143,12 @@ void ppm_demo() {
     delay(1000);
     for (int p = 400; p < 1200; p++) {
         display_ppm(p);
+        if (!digitalRead(demobutton)) {
+            display_logo();
+            delay(500);
+            while (!digitalRead(demobutton));
+            return;
+        }
         delay(30);
     }
     display_logo();
