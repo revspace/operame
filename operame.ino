@@ -205,6 +205,10 @@ void setup() {
     };
     WiFiSettings.onPortalWaitLoop = []() {
         if (ota_enabled) ArduinoOTA.handle();
+        if (!digitalRead(portalbutton)) {
+            delay(50);
+            if (!digitalRead(portalbutton)) ESP.restart();
+        }
     };
 
     if (wifi_enabled) WiFiSettings.connect(false, 15);
