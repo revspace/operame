@@ -37,6 +37,20 @@ bool wifi_enabled;
 bool mqtt_enabled;
 int max_failures;
 
+struct Timer {
+    unsigned long previous;
+    unsigned long interval;
+    std::function<void()> function;
+    void operator()() {
+        if (millis() - previous >= interval) {
+            function();
+            previous = millis();
+        }
+    }
+    Timer(unsigned long ms, std::function<void()> f)
+        : interval(ms), function(f) {}
+};
+
 void retain(String topic, String message) {
     Serial.printf("%s %s\n", topic.c_str(), message.c_str());
     mqtt.publish(topic, message, true, 0);
@@ -191,19 +205,19 @@ void setup() {
 
     if (ota_enabled) WiFiSettings.onPortal = setup_ota;
 
-    WiFiSettings.onConnect = []() {
+    WiFiSettings.onConnect = [] {
         check_buttons();
         display_big("Verbinden met WiFi...", TFT_BLUE);
         return 50;
     };
-    WiFiSettings.onFailure = []() {
+    WiFiSettings.onFailure = [] {
         display_big("WiFi mislukt!", TFT_RED);
         delay(2000);
     };
-    WiFiSettings.onPortal = []() {
+    WiFiSettings.onPortal = [] {
         display_big("Configuratieportal", TFT_BLUE);
     };
-    WiFiSettings.onPortalWaitLoop = []() {
+    WiFiSettings.onPortalWaitLoop = [] {
         if (ota_enabled) ArduinoOTA.handle();
         if (!digitalRead(portalbutton)) {
             delay(50);
@@ -219,7 +233,6 @@ void setup() {
     if (ota_enabled) setup_ota();
 
     display_big(":-)");
-
 }
 
 void connect_mqtt() {
@@ -312,40 +325,50 @@ int get_co2() {
     return -1;  // suppress warning
 }
 
+
 void loop() {
-    static unsigned long previous_mqtt = 0;
-    unsigned long start = millis();
+    static int co2;
 
-    if (mqtt_enabled) mqtt.loop();
+    static Timer read_sensor {
+        5000,
+        [] {
+            co2 = get_co2();
+            Serial.println(co2);
+        }
+    };
+    read_sensor();
 
-    int co2 = get_co2();
+    static Timer display {
+        50,
+        [] {
+            if (co2 < 0) {
+                display_big("sensorfout", TFT_RED);
+            }
+            else if (co2 == 0) {
+                display_big("wacht...");
+            } else {
+                // some MH-Z19's go to 10000 but the display has space for 4 digits
+                display_ppm(co2 > 9999 ? 9999 : co2);
+            }
+        }
+    };
+    display();
 
-    if (co2 < 0) {
-        display_big("sensorfout", TFT_RED);
-    }
-    else if (co2 == 0) {
-        display_big("wacht...");
-    }
-    else {
-        Serial.println(co2);
-        // some MH-Z19's go to 10000 but the display has space for 4 digits
-        if (co2 > 9999) co2 = 9999;
-
-        display_ppm(co2);
-
-        if (mqtt_enabled && millis() - previous_mqtt >= mqtt_interval) {
-            previous_mqtt = millis();
+    static Timer publish {
+        mqtt_interval,
+        [] {
+            if (!mqtt_enabled) return;
             connect_mqtt();
             String message = mqtt_template;
             message.replace("{}", String(co2));
             retain(mqtt_topic, message);
         }
+    };
+    if (mqtt_enabled) {
+        mqtt.loop();
+        publish();
     }
 
-    while (millis() - start < 6000) {
-        if (co2 > 0) display_ppm(co2);  // repeat, for blinking
-        if (ota_enabled) ArduinoOTA.handle();
-        check_buttons();
-        delay(20);
-    }
+    if (ota_enabled) ArduinoOTA.handle();
+    check_buttons();
 }
