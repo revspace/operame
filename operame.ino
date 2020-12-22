@@ -268,7 +268,7 @@ int aqc_get_co2() {
         hwserial1.write(command, sizeof(command));
         delay(50);
         int c = hwserial1.readBytes(response, sizeof(response));
-        if (c != sizeof(response)) {
+        if (c != sizeof(response) || response[0] != 0xff || response[1] != 0x86) {
             continue;
         }
         uint8_t checksum = 255;
