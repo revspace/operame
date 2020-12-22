@@ -349,8 +349,7 @@ void loop() {
         [] {
             if (co2 < 0) {
                 display_big("sensorfout", TFT_RED);
-            }
-            else if (co2 == 0) {
+            } else if (co2 == 0) {
                 display_big("wacht...");
             } else {
                 // some MH-Z19's go to 10000 but the display has space for 4 digits
