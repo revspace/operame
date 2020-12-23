@@ -75,6 +75,23 @@ void display_big(const String& text, int fg = TFT_WHITE, int bg = TFT_BLACK) {
     sprite.pushSprite(0, 0);
 }
 
+void display_lines(const std::list<String>& lines, int fg = TFT_WHITE, int bg = TFT_BLACK) {
+    sprite.setTextSize(1);
+    sprite.setTextFont(4);
+    sprite.setTextDatum(MC_DATUM);
+    sprite.setTextColor(fg, bg);
+    sprite.fillSprite(bg);
+    if (WiFi.status() == WL_CONNECTED)
+        sprite.drawRect(0, 0, display.width(), display.height(), TFT_BLUE);
+    const int line_height = 32;
+    int y = display.height()/2 - (lines.size()-1) * line_height/2;
+    for (auto line : lines) {
+        sprite.drawString(line, display.width()/2, y);
+        y += line_height;
+    }
+    sprite.pushSprite(0, 0);
+}
+
 void display_logo() {
     sprite.setSwapBytes(true);
     sprite.fillSprite(TFT_BLACK);
@@ -220,10 +237,22 @@ void setup() {
         display_big("WiFi mislukt!", TFT_RED);
         delay(2000);
     };
-    WiFiSettings.onPortal = [] {
-        display_big("Configuratieportal", TFT_BLUE);
-    };
     WiFiSettings.onPortalWaitLoop = [] {
+        if (WiFi.softAPgetStationNum()) {
+            display_lines({
+                "Volg instructies op",
+                "smartphone.",
+                "(login-notificatie)"
+            }, TFT_WHITE, TFT_BLUE);
+        } else {
+            display_lines({
+                "Voor configuratie,",
+                "verbind met WiFi",
+                "\"" + WiFiSettings.hostname + "\"",
+                "met een smartphone."
+            }, TFT_WHITE, TFT_BLUE);
+            if (millis() > 10*60*1000) ESP.restart();
+        }
         if (ota_enabled) ArduinoOTA.handle();
         if (!digitalRead(portalbutton)) {
             delay(50);
