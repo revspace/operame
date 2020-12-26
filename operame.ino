@@ -319,7 +319,7 @@ int aqc_get_co2() {
     static bool initialized = false;
 
     const uint8_t command[9] = { 0xff, 0x01, 0xc5, 0, 0, 0, 0, 0, 0x3a };
-    char response[9];
+    uint8_t response[9];
     int co2 = -1;
 
     for (int attempt = 0; attempt < 3; attempt++) {
@@ -329,7 +329,7 @@ int aqc_get_co2() {
 
         hwserial1.write(command, sizeof(command));
         delay(50);
-        int c = hwserial1.readBytes(response, sizeof(response));
+        size_t c = hwserial1.readBytes(response, sizeof(response));
         if (c != sizeof(response) || response[0] != 0xff || response[1] != 0x86) {
             continue;
         }
