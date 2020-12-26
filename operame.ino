@@ -385,6 +385,8 @@ int mhz_get_co2() {
 }
 
 int get_co2() {
+    // <0 means read error, 0 means still initializing, >0 is PPM value
+
     if (driver == AQC) return aqc_get_co2();
     if (driver == MHZ) return mhz_get_co2();
 
