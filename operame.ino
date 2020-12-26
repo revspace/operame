@@ -237,22 +237,55 @@ void setup() {
         display_big("WiFi mislukt!", TFT_RED);
         delay(2000);
     };
+    static int portal_phase = 0;
+    WiFiSettings.onPortalView = [] {
+        if (portal_phase < 2) portal_phase = 2;
+    };
+    WiFiSettings.onConfigSaved = [] {
+        portal_phase = 3;
+    };
     WiFiSettings.onPortalWaitLoop = [] {
-        if (WiFi.softAPgetStationNum()) {
-            display_lines({
-                "Volg instructies op",
-                "smartphone.",
-                "(login-notificatie)"
-            }, TFT_WHITE, TFT_BLUE);
-        } else {
-            display_lines({
-                "Voor configuratie,",
-                "verbind met WiFi",
-                "\"" + WiFiSettings.hostname + "\"",
-                "met een smartphone."
-            }, TFT_WHITE, TFT_BLUE);
-            if (millis() > 10*60*1000) ESP.restart();
+        if (WiFi.softAPgetStationNum() == 0) portal_phase = 0;
+        else if (! portal_phase) portal_phase = 1;
+
+        switch (portal_phase) {
+            case 0: {
+                display_lines({
+                    "Voor configuratie,",
+                    "verbind met WiFi",
+                    "\"" + WiFiSettings.hostname + "\"",
+                    "met een smartphone."
+                }, TFT_WHITE, TFT_BLUE);
+                break ;
+            }
+            case 1: {
+                display_lines({
+                    "Volg instructies op",
+                    "uw smartphone.",
+                    "(inlog-notificatie)"
+                }, TFT_WHITE, TFT_BLUE);
+                break;
+            }
+            case 2: {
+                display_lines({
+                    "Wijzig instellingen",
+                    "en klik op \"Save\".",
+                    "(rechtsonder)"
+                }, TFT_WHITE, TFT_BLUE);
+                break;
+            }
+            case 3: {
+                display_lines({
+                    "Wijzig instellingen",
+                    "en klik op \"Save\".",
+                    "Of \"Restart device\"",
+                    "als u klaar bent."
+                }, TFT_WHITE, TFT_BLUE);
+                break;
+            }
         }
+        if (portal_phase == 0 && millis() > 10*60*1000) ESP.restart();
+
         if (ota_enabled) ArduinoOTA.handle();
         if (!digitalRead(portalbutton)) {
             delay(50);
