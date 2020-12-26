@@ -424,7 +424,6 @@ void loop() {
     static Timer publish {
         mqtt_interval,
         [] {
-            if (!mqtt_enabled) return;
             if (co2 <= 0) return;
             connect_mqtt();
             String message = mqtt_template;
