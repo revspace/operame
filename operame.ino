@@ -358,7 +358,7 @@ void mhz_setup() {
     mhz.begin(hwserial1);
     // mhz.setFilter(true, true);  Library filter doesn't handle 0436
     mhz.autoCalibration(true);
-    char v[5];
+    char v[5] = {};
     mhz.getVersion(v);
     v[4] = '\0';
     if (strcmp("0436", v) == 0) mhz_co2_init = 436;
