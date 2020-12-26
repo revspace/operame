@@ -102,6 +102,12 @@ void display_logo() {
     sprite.pushSprite(0, 0);
 }
 
+void panic(const String& message) {
+    display_big(message, TFT_RED);
+    delay(5000);
+    ESP.restart();
+}
+
 void setup_ota() {
     ArduinoOTA.setHostname(WiFiSettings.hostname.c_str());
     ArduinoOTA.setPassword(WiFiSettings.password.c_str());
@@ -284,7 +290,9 @@ void setup() {
                 break;
             }
         }
-        if (portal_phase == 0 && millis() > 10*60*1000) ESP.restart();
+        if (portal_phase == 0 && millis() > 10*60*1000) {
+            panic("Tijd verstreken");
+        }
 
         if (ota_enabled) ArduinoOTA.handle();
         if (!digitalRead(portalbutton)) {
@@ -311,7 +319,7 @@ void connect_mqtt() {
         failures = 0;
     } else {
         failures++;
-        if (failures >= max_failures) ESP.restart();
+        if (failures >= max_failures) panic("MQTT onbereikbaar");
     }
 }
 
@@ -391,7 +399,7 @@ int get_co2() {
     if (driver == MHZ) return mhz_get_co2();
 
     // Should be unreachable
-    ESP.restart();
+    panic("driverfout");
     return -1;  // suppress warning
 }
 
