@@ -390,7 +390,7 @@ void setup() {
     if (ota_enabled) setup_ota();
 }
 
-#define every(t) for (static uint16_t _lasttime; (uint16_t)((uint16_t)millis() - _lasttime) >= (t); _lasttime += (t))
+#define every(t) for (static uint16_t _lasttime; (uint16_t)((uint16_t)millis() - _lasttime) >= (t); _lasttime = millis())
 
 void loop() {
     static int co2;
