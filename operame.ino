@@ -307,8 +307,6 @@ void setup() {
     if (mqtt_enabled) mqtt.begin(server.c_str(), port, wificlient);
 
     if (ota_enabled) setup_ota();
-
-    display_big(":-)");
 }
 
 void connect_mqtt() {
