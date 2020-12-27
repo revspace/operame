@@ -316,7 +316,6 @@ void setup() {
     mqtt_template = WiFiSettings.string("operame_mqtt_template", "{} PPM", "Berichtsjabloon");
     WiFiSettings.info("De {} in het sjabloon wordt vervangen door de gemeten waarde.");
 
-    if (ota_enabled) WiFiSettings.onPortal = setup_ota;
 
     WiFiSettings.onConnect = [] {
         display_big("Verbinden met WiFi...", TFT_BLUE);
@@ -328,6 +327,11 @@ void setup() {
         delay(2000);
     };
     static int portal_phase = 0;
+    static unsigned long portal_start;
+    WiFiSettings.onPortal = [] {
+        if (ota_enabled) setup_ota;
+        portal_start = millis();
+    };
     WiFiSettings.onPortalView = [] {
         if (portal_phase < 2) portal_phase = 2;
     };
@@ -374,7 +378,7 @@ void setup() {
                 break;
             }
         }
-        if (portal_phase == 0 && millis() > 10*60*1000) {
+        if (portal_phase == 0 && millis() - portal_start > 10*60*1000) {
             panic("Tijd verstreken");
         }
 
