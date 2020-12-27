@@ -121,18 +121,21 @@ void setup_ota() {
     ArduinoOTA.begin();
 }
 
+bool button(int pin) {
+    if (digitalRead(pin)) return false;
+    unsigned long start = millis();
+    while (!digitalRead(pin)) {
+        if (millis() - start >= 50) display_big("");
+    }
+    return millis() - start >= 50;
+}
+
 void check_portalbutton() {
-    if (digitalRead(portalbutton)) return;
-    delay(50);
-    if (digitalRead(portalbutton)) return;
-    WiFiSettings.portal();
+    if (button(portalbutton)) WiFiSettings.portal();
 }
 
 void check_demobutton() {
-    if (digitalRead(demobutton)) return;
-    delay(50);
-    if (digitalRead(demobutton)) return;
-    ppm_demo();
+    if (button(demobutton)) ppm_demo();
 }
 
 void check_buttons() {
@@ -166,10 +169,9 @@ void ppm_demo() {
     delay(1000);
     for (int p = 400; p < 1200; p++) {
         display_ppm(p);
-        if (!digitalRead(demobutton)) {
+        if (button(demobutton)) {
             display_logo();
             delay(500);
-            while (!digitalRead(demobutton));
             return;
         }
         delay(30);
@@ -235,8 +237,8 @@ void setup() {
     if (ota_enabled) WiFiSettings.onPortal = setup_ota;
 
     WiFiSettings.onConnect = [] {
-        check_buttons();
         display_big("Verbinden met WiFi...", TFT_BLUE);
+        check_portalbutton();
         return 50;
     };
     WiFiSettings.onFailure = [] {
@@ -295,10 +297,7 @@ void setup() {
         }
 
         if (ota_enabled) ArduinoOTA.handle();
-        if (!digitalRead(portalbutton)) {
-            delay(50);
-            if (!digitalRead(portalbutton)) ESP.restart();
-        }
+        if (button(portalbutton)) ESP.restart();
     };
 
     if (wifi_enabled) WiFiSettings.connect(false, 15);
