@@ -329,7 +329,7 @@ void setup() {
     static int portal_phase = 0;
     static unsigned long portal_start;
     WiFiSettings.onPortal = [] {
-        if (ota_enabled) setup_ota;
+        if (ota_enabled) setup_ota();
         portal_start = millis();
     };
     WiFiSettings.onPortalView = [] {
