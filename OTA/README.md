@@ -22,7 +22,7 @@ Stappen:
 python espota.py -i 192.168.22.228 -p 3232 --auth=xxxxxx -f ./firmware_mqtt.bin 
 ````
 
-Waarbij ```192.168.22.228``` vervangen wordt door het IP adres van jouw operame device en ```3232``` het port nummer (3232 is de default en is waarschijnlijk altijd hetzelfde).
+Waarbij ```192.168.22.228``` vervangen wordt door het IP adres van jouw operame device en ```3232``` het port nummer (3232 is de default en is waarschijnlijk altijd hetzelfde). xxxxxx moet je vervangen door het in stap 2 ingestelde wachtwoord.
 
 Je zult op de ```operame``` het uploaden zien (met percentage oplopend van 0..100%). Output op de terminal:
 ````
@@ -44,12 +44,12 @@ Via https://accounts.adafruit.com/ kun je een gratis account aanmaken om vervolg
 Voorbeeld van mijn data: https://io.adafruit.com/bart59/dashboards/co2
 Binnen adafruit definieer je een dashboard en een feed voor elke operame sensor.
 
-Instellingen die je moet doen via de operame web interface:
+Instellingen die je moet doen via de ```operame``` web interface:
 
 ````
 Enable mqqt: 	check checkbox
-Mqtt Host:		io.adafruit.com
-Mqtt Port:		1883
+Mqtt Host:	io.adafruit.com
+Mqtt Port:	1883
 Mqtt Username: 	Your Adafruit IO Username
 Mqtt Password:	Your Adafruit IO Key
 Mqtt topic: 	<adafruit username>/feeds/<feed name> (in mijn geval: bart59/feeds/CO2_home)
