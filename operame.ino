@@ -170,11 +170,15 @@ void setup_ota() {
     ArduinoOTA.begin();
 }
 
+const char * c_nullptr(const char *p) { 
+    return (strlen(p) ? p : nullptr); 
+}
+
 void connect_mqtt() {
     if (mqtt.connected()) return;  // already/still connected
 
     static int failures = 0;
-    if (mqtt.connect(WiFiSettings.hostname.c_str(), mqtt_username.c_str(), mqtt_password.c_str(), false)) {
+    if (mqtt.connect(WiFiSettings.hostname.c_str(), c_nullptr(mqtt_username.c_str()), c_nullptr(mqtt_password.c_str()), false)) {
         failures = 0;
         Serial.println("MQTT connected");
     } else {
