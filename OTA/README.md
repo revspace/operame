@@ -47,7 +47,7 @@ Binnen adafruit definieer je een dashboard en een feed voor elke operame sensor.
 Instellingen die je moet doen via de ```operame``` web interface:
 
 ````
-Enable mqqt: 	check checkbox
+Enable Mqtt: 	check checkbox
 Mqtt Host:	io.adafruit.com
 Mqtt Port:	1883
 Mqtt Username: 	Your Adafruit IO Username
