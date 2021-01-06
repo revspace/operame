@@ -6,7 +6,7 @@
 #include <ArduinoOTA.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
-#include <logo.h>
+#include "logo.h"
 #include <list>
 
 enum Driver { AQC, MHZ };
@@ -36,6 +36,8 @@ String          mqtt_template;
 bool            add_units;
 bool            wifi_enabled;
 bool            mqtt_enabled;
+String          mqtt_username;
+String          mqtt_password;
 int             max_failures;
 
 void retain(const String& topic, const String& message) {
@@ -172,9 +174,11 @@ void connect_mqtt() {
     if (mqtt.connected()) return;  // already/still connected
 
     static int failures = 0;
-    if (mqtt.connect(WiFiSettings.hostname.c_str())) {
+    if (mqtt.connect(WiFiSettings.hostname.c_str(), mqtt_username.c_str(), mqtt_password.c_str(), false)) {
         failures = 0;
+        Serial.println("MQTT connected");
     } else {
+        Serial.println("MQTT connect error");
         failures++;
         if (failures >= max_failures) panic("MQTT onbereikbaar");
     }
@@ -309,6 +313,8 @@ void setup() {
     WiFiSettings.heading("MQTT");
     mqtt_enabled  = WiFiSettings.checkbox("operame_mqtt", false, "Metingen via het MQTT-protocol versturen") && wifi_enabled;
     String server = WiFiSettings.string("mqtt_server", 64, "", "Broker");
+    mqtt_username = WiFiSettings.string("mqtt_username", 64, "", "Gebruikersnaam");
+    mqtt_password = WiFiSettings.string("mqtt_password", 64, "", "Wachtwoord");
     int port      = WiFiSettings.integer("mqtt_port", 0, 65535, 1883, "Broker TCP-poort");
     max_failures  = WiFiSettings.integer("operame_max_failures", 0, 1000, 10, "Aantal verbindingsfouten voor automatische herstart");
     mqtt_topic  = WiFiSettings.string("operame_mqtt_topic", WiFiSettings.hostname, "Topic");
