@@ -53,5 +53,5 @@ Mqtt Port:	1883
 Mqtt Username: 	Your Adafruit IO Username
 Mqtt Password:	Your Adafruit IO Key
 Mqtt topic: 	<adafruit username>/feeds/<feed name> (in mijn geval: bart59/feeds/CO2_home)
+Mqtt template:	{}
 ````
-
