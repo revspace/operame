@@ -8,8 +8,10 @@
 #include <TFT_eSPI.h>
 #include <logo.h>
 #include <list>
+#include <operame_strings.h>
 
 #define LANGUAGE "nl"
+OperameLanguage::Texts T;
 
 enum Driver { AQC, MHZ };
 Driver          driver;
@@ -178,7 +180,7 @@ void connect_mqtt() {
         failures = 0;
     } else {
         failures++;
-        if (failures >= max_failures) panic("MQTT onbereikbaar");
+        if (failures >= max_failures) panic(T.error_mqtt);
     }
 }
 
@@ -258,7 +260,7 @@ int get_co2() {
     if (driver == MHZ) return mhz_get_co2();
 
     // Should be unreachable
-    panic("driverfout");
+    panic(T.error_driver);
     return -1;  // suppress warning
 }
 
@@ -280,7 +282,7 @@ void setup() {
     sprite.createSprite(display.width(), display.height());
 
     while (digitalRead(pin_pcb_ok)) {
-        display_big("module verkeerd om!", TFT_RED);
+        display_big(T.error_module, TFT_RED);
         delay(1000);
     }
 
@@ -301,32 +303,39 @@ void setup() {
 
     WiFiSettings.hostname = "operame-";
     WiFiSettings.language = LANGUAGE;
-    wifi_enabled  = WiFiSettings.checkbox("operame_wifi", false, "WiFi-verbinding gebruiken");
-    ota_enabled   = WiFiSettings.checkbox("operame_ota", false, "Draadloos herprogrammeren inschakelen. (Gebruikt portaalwachtwoord!)") && wifi_enabled;
+    WiFiSettings.begin();
+
+    OperameLanguage::select(T, WiFiSettings.language);
+    for (auto& str : T.portal_instructions[0]) {
+        str.replace("{ssid}", WiFiSettings.hostname);
+    }
+
+    wifi_enabled  = WiFiSettings.checkbox("operame_wifi", false, T.config_wifi);
+    ota_enabled   = WiFiSettings.checkbox("operame_ota", false, T.config_ota) && wifi_enabled;
 
     WiFiSettings.heading("CO2-niveaus");
-    co2_warning   = WiFiSettings.integer("operame_co2_warning", 400, 5000, 700, "Geel vanaf [ppm]");
-    co2_critical  = WiFiSettings.integer("operame_co2_critical",400, 5000, 800, "Rood vanaf [ppm]");
-    co2_blink     = WiFiSettings.integer("operame_co2_blink",   800, 5000, 800, "Knipperen vanaf [ppm]");
+    co2_warning   = WiFiSettings.integer("operame_co2_warning", 400, 5000, 700, T.config_co2_warning);
+    co2_critical  = WiFiSettings.integer("operame_co2_critical",400, 5000, 800, T.config_co2_critical);
+    co2_blink     = WiFiSettings.integer("operame_co2_blink",   800, 5000, 800, T.config_co2_blink);
 
     WiFiSettings.heading("MQTT");
-    mqtt_enabled  = WiFiSettings.checkbox("operame_mqtt", false, "Metingen via het MQTT-protocol versturen") && wifi_enabled;
-    String server = WiFiSettings.string("mqtt_server", 64, "", "Broker");
-    int port      = WiFiSettings.integer("mqtt_port", 0, 65535, 1883, "Broker TCP-poort");
-    max_failures  = WiFiSettings.integer("operame_max_failures", 0, 1000, 10, "Aantal verbindingsfouten voor automatische herstart");
-    mqtt_topic  = WiFiSettings.string("operame_mqtt_topic", WiFiSettings.hostname, "Topic");
-    mqtt_interval = 1000UL * WiFiSettings.integer("operame_mqtt_interval", 10, 3600, 60, "Publicatie-interval [s]");
-    mqtt_template = WiFiSettings.string("operame_mqtt_template", "{} PPM", "Berichtsjabloon");
-    WiFiSettings.info("De {} in het sjabloon wordt vervangen door de gemeten waarde.");
+    mqtt_enabled  = WiFiSettings.checkbox("operame_mqtt", false, T.config_mqtt) && wifi_enabled;
+    String server = WiFiSettings.string("mqtt_server", 64, "", T.config_mqtt_server);
+    int port      = WiFiSettings.integer("mqtt_port", 0, 65535, 1883, T.config_mqtt_port);
+    max_failures  = WiFiSettings.integer("operame_max_failures", 0, 1000, 10, T.config_max_failures);
+    mqtt_topic  = WiFiSettings.string("operame_mqtt_topic", WiFiSettings.hostname, T.config_mqtt_topic);
+    mqtt_interval = 1000UL * WiFiSettings.integer("operame_mqtt_interval", 10, 3600, 60, T.config_mqtt_interval);
+    mqtt_template = WiFiSettings.string("operame_mqtt_template", "{} PPM", T.config_mqtt_template);
+    WiFiSettings.info(T.config_template_info);
 
 
     WiFiSettings.onConnect = [] {
-        display_big("Verbinden met WiFi...", TFT_BLUE);
+        display_big(T.connecting, TFT_BLUE);
         check_portalbutton();
         return 50;
     };
     WiFiSettings.onFailure = [] {
-        display_big("WiFi mislukt!", TFT_RED);
+        display_big(T.error_wifi, TFT_RED);
         delay(2000);
     };
     static int portal_phase = 0;
@@ -345,44 +354,10 @@ void setup() {
         if (WiFi.softAPgetStationNum() == 0) portal_phase = 0;
         else if (! portal_phase) portal_phase = 1;
 
-        switch (portal_phase) {
-            case 0: {
-                display_lines({
-                    "Voor configuratie,",
-                    "verbind met WiFi",
-                    "\"" + WiFiSettings.hostname + "\"",
-                    "met een smartphone."
-                }, TFT_WHITE, TFT_BLUE);
-                break ;
-            }
-            case 1: {
-                display_lines({
-                    "Volg instructies op",
-                    "uw smartphone.",
-                    "(inlog-notificatie)"
-                }, TFT_WHITE, TFT_BLUE);
-                break;
-            }
-            case 2: {
-                display_lines({
-                    "Wijzig instellingen",
-                    "en klik op \"Save\".",
-                    "(rechtsonder)"
-                }, TFT_WHITE, TFT_BLUE);
-                break;
-            }
-            case 3: {
-                display_lines({
-                    "Wijzig instellingen",
-                    "en klik op \"Save\".",
-                    "Of \"Restart device\"",
-                    "als u klaar bent."
-                }, TFT_WHITE, TFT_BLUE);
-                break;
-            }
-        }
+        display_lines(T.portal_instructions[portal_phase], TFT_WHITE, TFT_BLUE);
+
         if (portal_phase == 0 && millis() - portal_start > 10*60*1000) {
-            panic("Tijd verstreken");
+            panic(T.error_timeout);
         }
 
         if (ota_enabled) ArduinoOTA.handle();
@@ -409,9 +384,9 @@ void loop() {
 
     every(50) {
         if (co2 < 0) {
-            display_big("sensorfout", TFT_RED);
+            display_big(T.error_sensor, TFT_RED);
         } else if (co2 == 0) {
-            display_big("wacht...");
+            display_big(T.wait);
         } else {
             // some MH-Z19's go to 10000 but the display has space for 4 digits
             display_ppm(co2 > 9999 ? 9999 : co2);

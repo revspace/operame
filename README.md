@@ -2,6 +2,12 @@
 
 Dit is de broncode van de firmware voor de [Operame CO2-meter](https://operame.nl/).
 
+## Language
+
+The default language is Dutch; users can pick a different language using the
+WiFi configuration portal. To change the default setting to English, change
+`#define LANGUAGE "nl"` to `#define LANGUAGE "en"`.
+
 ## Gebruik
 
 ### Installatie
