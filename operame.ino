@@ -267,24 +267,40 @@ int get_co2() {
 void setup() {
     Serial.begin(115200);
     Serial.println("Operame start");
-    SPIFFS.begin(true);
+
+    digitalWrite(pin_backlight, HIGH);
+    display.init();
+    display.fillScreen(TFT_BLACK);
+    display.setRotation(1);
+    sprite.createSprite(display.width(), display.height());
+
+    OperameLanguage::select(T, LANGUAGE);
+
+    if (!SPIFFS.begin(false)) {
+        display_lines(T.first_run, TFT_MAGENTA);
+        if (!SPIFFS.format()) {
+            display_big(T.error_format, TFT_RED);
+            delay(20*1000);
+        }
+    }
 
     pinMode(pin_portalbutton,   INPUT_PULLUP);
     pinMode(pin_demobutton,     INPUT_PULLUP);
     pinMode(pin_pcb_ok,         INPUT_PULLUP);
     pinMode(pin_backlight,      OUTPUT);
 
-    digitalWrite(pin_backlight, HIGH);
-
-    display.init();
-    display.fillScreen(TFT_BLACK);
-    display.setRotation(1);
-    sprite.createSprite(display.width(), display.height());
+    WiFiSettings.hostname = "operame-";
+    WiFiSettings.language = LANGUAGE;
+    WiFiSettings.begin();
+    OperameLanguage::select(T, WiFiSettings.language);
 
     while (digitalRead(pin_pcb_ok)) {
         display_big(T.error_module, TFT_RED);
         delay(1000);
     }
+
+    display_logo();
+    delay(2000);
 
     hwserial1.begin(9600, SERIAL_8N1, pin_sensor_rx, pin_sensor_tx);
 
@@ -298,14 +314,7 @@ void setup() {
         Serial.println("Using MHZ driver.");
     }
 
-    display_logo();
-    delay(2000);
 
-    WiFiSettings.hostname = "operame-";
-    WiFiSettings.language = LANGUAGE;
-    WiFiSettings.begin();
-
-    OperameLanguage::select(T, WiFiSettings.language);
     for (auto& str : T.portal_instructions[0]) {
         str.replace("{ssid}", WiFiSettings.hostname);
     }
@@ -327,7 +336,6 @@ void setup() {
     mqtt_interval = 1000UL * WiFiSettings.integer("operame_mqtt_interval", 10, 3600, 60, T.config_mqtt_interval);
     mqtt_template = WiFiSettings.string("operame_mqtt_template", "{} PPM", T.config_mqtt_template);
     WiFiSettings.info(T.config_template_info);
-
 
     WiFiSettings.onConnect = [] {
         display_big(T.connecting, TFT_BLUE);

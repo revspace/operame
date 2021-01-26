@@ -12,6 +12,7 @@ struct Texts {
         *error_timeout,
         *error_sensor,
         *error_wifi,
+        *error_format,
         *config_wifi,
         *config_ota,
         *config_co2_warning,
@@ -29,6 +30,7 @@ struct Texts {
         *wait
     ;
     std::vector<std::list<String>> portal_instructions;
+    std::list<String> first_run;
 };
 
 std::map<const String, const String> languages {
@@ -54,6 +56,7 @@ bool select(Texts& T, String language) {
         T.error_timeout = "Time's up";
         T.error_sensor = "sensor error";
         T.error_wifi = "WiFi failed!";
+        T.error_format = "Formatting failed";
         T.wait = "wait...";
         T.config_wifi = "Use WiFi connection";
         T.config_ota = "Enable wireless reprogramming. (Uses portal password!)";
@@ -93,6 +96,11 @@ bool select(Texts& T, String language) {
                 "when you're done."
             }
         };
+        T.first_run = {
+            "DO NOT TURN OFF",
+            "Initializing",
+            "flash memory.",
+        };
         return true;
     }
 
@@ -103,6 +111,7 @@ bool select(Texts& T, String language) {
         T.error_timeout = "Tijd verstreken";
         T.error_sensor = "sensorfout";
         T.error_wifi = "WiFi mislukt!";
+        T.error_format = "Formatteren mislukt";
         T.wait = "wacht...";
         T.config_wifi = "WiFi-verbinding gebruiken";
         T.config_ota = "Draadloos herprogrammeren inschakelen. (Gebruikt portaalwachtwoord!)";
@@ -141,6 +150,12 @@ bool select(Texts& T, String language) {
                 "Of \"Herstarten\"",
                 "als u klaar bent."
             }
+        };
+        T.first_run = {
+            "NIET",
+            "UITSCHAKELEN",
+            "Flashgeheugen",
+            "wordt voorbereid."
         };
         return true;
     }
