@@ -9,6 +9,8 @@
 #include <logo.h>
 #include <list>
 
+#define LANGUAGE "nl"
+
 enum Driver { AQC, MHZ };
 Driver          driver;
 MQTTClient      mqtt;
@@ -298,6 +300,7 @@ void setup() {
     delay(2000);
 
     WiFiSettings.hostname = "operame-";
+    WiFiSettings.language = LANGUAGE;
     wifi_enabled  = WiFiSettings.checkbox("operame_wifi", false, "WiFi-verbinding gebruiken");
     ota_enabled   = WiFiSettings.checkbox("operame_ota", false, "Draadloos herprogrammeren inschakelen. (Gebruikt portaalwachtwoord!)") && wifi_enabled;
 
