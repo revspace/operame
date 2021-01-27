@@ -42,15 +42,28 @@ bool            wifi_enabled;
 bool            mqtt_enabled;
 int             max_failures;
 
+std::list<int> history;
+
 void retain(const String& topic, const String& message) {
     Serial.printf("%s %s\n", topic.c_str(), message.c_str());
     mqtt.publish(topic, message, true, 0);
 }
 
 void clear_sprite(int bg = TFT_BLACK) {
+    int barheight=5;
     sprite.fillSprite(bg);
     if (WiFi.status() == WL_CONNECTED) {
-        sprite.drawRect(0, 0, display.width(), display.height(), TFT_BLUE);
+        sprite.drawRect(0, barheight+2, display.width(), display.height(), TFT_BLUE);
+    }
+    int x = 0;
+    int separator = bg == TFT_BLACK ? TFT_DARKGREY : TFT_BLACK;
+    sprite.drawFastHLine(0, barheight, display.width(), separator);
+    sprite.drawFastHLine(0, barheight+1, display.width(), separator);
+    for (auto& co2 : history) {
+        sprite.drawFastVLine(x, 0, barheight, (
+            co2 < 300 ? TFT_BLACK : co2 < co2_warning ? TFT_DARKGREEN : co2 < co2_critical ? TFT_ORANGE : TFT_MAROON
+        ));
+        x++;
     }
 }
 
@@ -378,6 +391,10 @@ void setup() {
     if (mqtt_enabled) mqtt.begin(server.c_str(), port, wificlient);
 
     if (ota_enabled) setup_ota();
+
+    for (int i = 0; i < display.width(); i++) {
+        history.push_back(0);
+    }
 }
 
 #define every(t) for (static unsigned long _lasttime; (unsigned long)((unsigned long)millis() - _lasttime) >= (t); _lasttime = millis())
@@ -388,6 +405,10 @@ void loop() {
     every(5000) {
         co2 = get_co2();
         Serial.println(co2);
+        if (co2 > 0) {
+            history.pop_front();
+            history.push_back(co2);
+        }
     }
 
     every(50) {
