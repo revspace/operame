@@ -9,6 +9,7 @@
 #include <logo.h>
 #include <list>
 #include <operame_strings.h>
+#include <SparkLine.h>
 
 #define LANGUAGE "nl"
 OperameLanguage::Texts T;
@@ -41,6 +42,8 @@ bool            add_units;
 bool            wifi_enabled;
 bool            mqtt_enabled;
 int             max_failures;
+bool            sparkline_enable;
+int             sparkline_bufferlenght;
 
 void retain(const String& topic, const String& message) {
     Serial.printf("%s %s\n", topic.c_str(), message.c_str());
@@ -53,6 +56,10 @@ void clear_sprite(int bg = TFT_BLACK) {
         sprite.drawRect(0, 0, display.width(), display.height(), TFT_BLUE);
     }
 }
+
+SparkLine<uint16_t> display_sparkline(766, [&](const uint16_t x0, const uint16_t y0, const uint16_t x1, const uint16_t y1) { 
+  sprite.drawLine(x0, y0, x1, y1, TFT_PURPLE);
+});
 
 void display_big(const String& text, int fg = TFT_WHITE, int bg = TFT_BLACK) {
     clear_sprite(bg);
@@ -67,6 +74,10 @@ void display_big(const String& text, int fg = TFT_WHITE, int bg = TFT_BLACK) {
     sprite.setTextDatum(MC_DATUM);
     sprite.setTextColor(fg, bg);
     sprite.drawString(text, display.width()/2, display.height()/2);
+
+    if (sparkline_enable) {
+        display_sparkline.draw( 10, display.height()/4*3, display.width()-20, display.height()/2-5); 
+        };
 
     sprite.pushSprite(0, 0);
 }
@@ -120,6 +131,7 @@ void ppm_demo() {
     delay(1000);
     for (int p = 400; p < 1200; p++) {
         display_ppm(p);
+        if (sparkline_enable ) display_sparkline.add(p);
         if (button(pin_demobutton)) {
             display_logo();
             delay(500);
@@ -128,6 +140,7 @@ void ppm_demo() {
         delay(30);
     }
     display_logo();
+    if (sparkline_enable ) display_sparkline.reset();
     delay(5000);
 }
 
@@ -337,6 +350,10 @@ void setup() {
     mqtt_template = WiFiSettings.string("operame_mqtt_template", "{} PPM", T.config_mqtt_template);
     WiFiSettings.info(T.config_template_info);
 
+    WiFiSettings.heading("sparkline");
+    sparkline_enable       = WiFiSettings.checkbox("operame_sparkline", false, T.config_sparkline);
+    sparkline_bufferlenght = WiFiSettings.integer("operame_sparkline_buffer", 0, 16383, 512, T.config_sparkline_buffer);    ; 
+
     WiFiSettings.onConnect = [] {
         display_big(T.connecting, TFT_BLUE);
         check_portalbutton();
@@ -378,6 +395,7 @@ void setup() {
     if (mqtt_enabled) mqtt.begin(server.c_str(), port, wificlient);
 
     if (ota_enabled) setup_ota();
+
 }
 
 #define every(t) for (static unsigned long _lasttime; (unsigned long)((unsigned long)millis() - _lasttime) >= (t); _lasttime = millis())
@@ -388,6 +406,7 @@ void loop() {
     every(5000) {
         co2 = get_co2();
         Serial.println(co2);
+        if (sparkline_enable ) display_sparkline.add(co2);
     }
 
     every(50) {
