@@ -31,6 +31,8 @@ struct Texts {
     ;
     std::vector<std::list<String>> portal_instructions;
     std::list<String> first_run;
+    std::list<String> calibration;
+    std::list<String> calibrating;
 };
 
 std::map<const String, const String> languages {
@@ -101,6 +103,17 @@ bool select(Texts& T, String language) {
             "Initializing",
             "flash memory.",
         };
+        T.calibration = {
+            "Manual calibration!",
+            "Press button",
+            "to cancel.",
+            ""
+        };
+        T.calibrating = {
+            "Assuming current",
+            "CO2 level to be",
+            "400 PPM."
+        };
         return true;
     }
 
@@ -156,6 +169,18 @@ bool select(Texts& T, String language) {
             "UITSCHAKELEN",
             "Flashgeheugen",
             "wordt voorbereid."
+        };
+        T.calibration = {
+            "Handmatige",
+            "calibratie!",
+            "knop = stop",
+            ""
+        };
+        T.calibrating = {
+            "Het huidige CO2-",
+            "niveau wordt",
+            "aangenomen",
+            "400 PPM te zijn."
         };
         return true;
     }

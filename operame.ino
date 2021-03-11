@@ -113,14 +113,46 @@ void display_ppm(int ppm) {
     display_big(String(ppm), fg, bg);
 }
 
+void calibrate() {
+    auto lines = T.calibration;
+    for (int count = 60; count >= 0; count--) {
+        lines.back() = String(count);
+        display_lines(lines, TFT_RED);
+        unsigned long start = millis();
+        while (millis() - start < 1000) {
+            if (button(pin_demobutton) || button(pin_portalbutton)) return;
+        }
+    }
+
+    lines = T.calibrating;
+    if (driver == AQC) for (auto& line : lines) line.replace("400", "425");
+    display_lines(lines, TFT_MAGENTA);
+
+    set_zero();    // actually instantaneous
+    delay(15000);  // give time to read long message
+}
+
 void ppm_demo() {
     display_big("demo!");
     delay(3000);
     display_logo();
     delay(1000);
+    int buttoncounter = 0;
     for (int p = 400; p < 1200; p++) {
         display_ppm(p);
         if (button(pin_demobutton)) {
+            display_logo();
+            delay(500);
+            return;
+        }
+
+        // Hold portal button from 700 to 800 for manual calibration
+        if (p >= 700 && p < 800 && !digitalRead(pin_portalbutton)) {
+            buttoncounter++;
+        }
+        if (p == 800 && buttoncounter >= 85) {
+            while (!digitalRead(pin_portalbutton)) delay(100);
+            calibrate();
             display_logo();
             delay(500);
             return;
@@ -184,6 +216,13 @@ void connect_mqtt() {
     }
 }
 
+void flush(Stream& s, int limit = 20) {
+    // .available() sometimes stays true (why?), hence the limit
+
+    s.flush();  // flush output
+    while(s.available() && --limit) s.read();  // flush input
+}
+
 int aqc_get_co2() {
     static bool initialized = false;
 
@@ -192,12 +231,10 @@ int aqc_get_co2() {
     int co2 = -1;
 
     for (int attempt = 0; attempt < 3; attempt++) {
-        hwserial1.flush();
-        int limit = 20;  // .available() sometimes stays true
-        while(hwserial1.available() && --limit) hwserial1.read();
-
+        flush(hwserial1);
         hwserial1.write(command, sizeof(command));
         delay(50);
+
         size_t c = hwserial1.readBytes(response, sizeof(response));
         if (c != sizeof(response) || response[0] != 0xff || response[1] != 0x86) {
             continue;
@@ -221,6 +258,11 @@ int aqc_get_co2() {
     if (!initialized && (co2 == 9999 || co2 == 400)) return 0;
     initialized = true;
     return co2;
+}
+
+void aqc_set_zero() {
+    const uint8_t command[9] = { 0xff, 0x01, 0x87, 0, 0, 0, 0, 0, 0x78 };
+    hwserial1.write(command, sizeof(command));
 }
 
 void mhz_setup() {
@@ -253,6 +295,10 @@ int mhz_get_co2() {
     return co2;
 }
 
+void mhz_set_zero() {
+    mhz.calibrate();
+}
+
 int get_co2() {
     // <0 means read error, 0 means still initializing, >0 is PPM value
 
@@ -262,6 +308,14 @@ int get_co2() {
     // Should be unreachable
     panic(T.error_driver);
     return -1;  // suppress warning
+}
+
+void set_zero() {
+    if (driver == AQC) { aqc_set_zero(); return; }
+    if (driver == MHZ) { mhz_set_zero(); return; }
+
+    // Should be unreachable
+    panic(T.error_driver);
 }
 
 void setup() {
