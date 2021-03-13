@@ -262,6 +262,7 @@ int aqc_get_co2() {
 
 void aqc_set_zero() {
     const uint8_t command[9] = { 0xff, 0x01, 0x87, 0, 0, 0, 0, 0, 0x78 };
+    flush(hwserial1);
     hwserial1.write(command, sizeof(command));
 }
 
