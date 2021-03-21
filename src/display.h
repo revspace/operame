@@ -5,8 +5,17 @@
 #include <src/logo.h>
 #include <list>
 
-TFT_eSPI        tft;
-TFT_eSprite     sprite(&tft);
+namespace {
+    TFT_eSPI        tft;
+    TFT_eSprite     sprite(&tft);
+}
+
+void setup_display() {
+    tft.init();
+    tft.fillScreen(TFT_BLACK);
+    tft.setRotation(1);
+    sprite.createSprite(tft.width(), tft.height());
+}
 
 void clear_sprite(int bg = TFT_BLACK) {
     sprite.fillSprite(bg);

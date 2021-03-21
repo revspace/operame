@@ -156,10 +156,7 @@ void setup() {
     Serial.println("Operame start");
 
     digitalWrite(pin_backlight, HIGH);
-    tft.init();
-    tft.fillScreen(TFT_BLACK);
-    tft.setRotation(1);
-    sprite.createSprite(tft.width(), tft.height());
+    setup_display();
 
     OperameLanguage::select(T, LANGUAGE);
 
