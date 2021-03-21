@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <WiFi.h>
 #include <MQTT.h>
 #include <SPIFFS.h>
@@ -41,11 +42,6 @@ bool            add_units;
 bool            wifi_enabled;
 bool            mqtt_enabled;
 int             max_failures;
-
-void retain(const String& topic, const String& message) {
-    Serial.printf("%s %s\n", topic.c_str(), message.c_str());
-    mqtt.publish(topic, message, true, 0);
-}
 
 void clear_sprite(int bg = TFT_BLACK) {
     sprite.fillSprite(bg);
@@ -113,56 +109,6 @@ void display_ppm(int ppm) {
     display_big(String(ppm), fg, bg);
 }
 
-void calibrate() {
-    auto lines = T.calibration;
-    for (int count = 60; count >= 0; count--) {
-        lines.back() = String(count);
-        display_lines(lines, TFT_RED);
-        unsigned long start = millis();
-        while (millis() - start < 1000) {
-            if (button(pin_demobutton) || button(pin_portalbutton)) return;
-        }
-    }
-
-    lines = T.calibrating;
-    if (driver == AQC) for (auto& line : lines) line.replace("400", "425");
-    display_lines(lines, TFT_MAGENTA);
-
-    set_zero();    // actually instantaneous
-    delay(15000);  // give time to read long message
-}
-
-void ppm_demo() {
-    display_big("demo!");
-    delay(3000);
-    display_logo();
-    delay(1000);
-    int buttoncounter = 0;
-    for (int p = 400; p < 1200; p++) {
-        display_ppm(p);
-        if (button(pin_demobutton)) {
-            display_logo();
-            delay(500);
-            return;
-        }
-
-        // Hold portal button from 700 to 800 for manual calibration
-        if (p >= 700 && p < 800 && !digitalRead(pin_portalbutton)) {
-            buttoncounter++;
-        }
-        if (p == 800 && buttoncounter >= 85) {
-            while (!digitalRead(pin_portalbutton)) delay(100);
-            calibrate();
-            display_logo();
-            delay(500);
-            return;
-        }
-        delay(30);
-    }
-    display_logo();
-    delay(5000);
-}
-
 void panic(const String& message) {
     display_big(message, TFT_RED);
     delay(5000);
@@ -176,44 +122,6 @@ bool button(int pin) {
         if (millis() - start >= 50) display_big("");
     }
     return millis() - start >= 50;
-}
-
-void check_portalbutton() {
-    if (button(pin_portalbutton)) WiFiSettings.portal();
-}
-
-void check_demobutton() {
-    if (button(pin_demobutton)) ppm_demo();
-}
-
-void check_buttons() {
-    check_portalbutton();
-    check_demobutton();
-}
-
-void setup_ota() {
-    ArduinoOTA.setHostname(WiFiSettings.hostname.c_str());
-    ArduinoOTA.setPassword(WiFiSettings.password.c_str());
-    ArduinoOTA.onStart(   []()              { display_big("OTA", TFT_BLUE); });
-    ArduinoOTA.onEnd(     []()              { display_big("OTA done", TFT_GREEN); });
-    ArduinoOTA.onError(   [](ota_error_t e) { display_big("OTA failed", TFT_RED); });
-    ArduinoOTA.onProgress([](unsigned int p, unsigned int t) {
-        String pct { (int) ((float) p / t * 100) };
-        display_big(pct + "%");
-    });
-    ArduinoOTA.begin();
-}
-
-void connect_mqtt() {
-    if (mqtt.connected()) return;  // already/still connected
-
-    static int failures = 0;
-    if (mqtt.connect(WiFiSettings.hostname.c_str())) {
-        failures = 0;
-    } else {
-        failures++;
-        if (failures >= max_failures) panic(T.error_mqtt);
-    }
 }
 
 void flush(Stream& s, int limit = 20) {
@@ -317,6 +225,99 @@ void set_zero() {
 
     // Should be unreachable
     panic(T.error_driver);
+}
+
+void calibrate() {
+    auto lines = T.calibration;
+    for (int count = 60; count >= 0; count--) {
+        lines.back() = String(count);
+        display_lines(lines, TFT_RED);
+        unsigned long start = millis();
+        while (millis() - start < 1000) {
+            if (button(pin_demobutton) || button(pin_portalbutton)) return;
+        }
+    }
+
+    lines = T.calibrating;
+    if (driver == AQC) for (auto& line : lines) line.replace("400", "425");
+    display_lines(lines, TFT_MAGENTA);
+
+    set_zero();    // actually instantaneous
+    delay(15000);  // give time to read long message
+}
+
+void ppm_demo() {
+    display_big("demo!");
+    delay(3000);
+    display_logo();
+    delay(1000);
+    int buttoncounter = 0;
+    for (int p = 400; p < 1200; p++) {
+        display_ppm(p);
+        if (button(pin_demobutton)) {
+            display_logo();
+            delay(500);
+            return;
+        }
+
+        // Hold portal button from 700 to 800 for manual calibration
+        if (p >= 700 && p < 800 && !digitalRead(pin_portalbutton)) {
+            buttoncounter++;
+        }
+        if (p == 800 && buttoncounter >= 85) {
+            while (!digitalRead(pin_portalbutton)) delay(100);
+            calibrate();
+            display_logo();
+            delay(500);
+            return;
+        }
+        delay(30);
+    }
+    display_logo();
+    delay(5000);
+}
+
+void check_portalbutton() {
+    if (button(pin_portalbutton)) WiFiSettings.portal();
+}
+
+void check_demobutton() {
+    if (button(pin_demobutton)) ppm_demo();
+}
+
+void check_buttons() {
+    check_portalbutton();
+    check_demobutton();
+}
+
+void setup_ota() {
+    ArduinoOTA.setHostname(WiFiSettings.hostname.c_str());
+    ArduinoOTA.setPassword(WiFiSettings.password.c_str());
+    ArduinoOTA.onStart(   []()              { display_big("OTA", TFT_BLUE); });
+    ArduinoOTA.onEnd(     []()              { display_big("OTA done", TFT_GREEN); });
+    ArduinoOTA.onError(   [](ota_error_t e) { display_big("OTA failed", TFT_RED); });
+    ArduinoOTA.onProgress([](unsigned int p, unsigned int t) {
+        String pct { (int) ((float) p / t * 100) };
+        display_big(pct + "%");
+    });
+    ArduinoOTA.begin();
+}
+
+void connect_mqtt() {
+    if (mqtt.connected()) return;  // already/still connected
+
+    static int failures = 0;
+    if (mqtt.connect(WiFiSettings.hostname.c_str())) {
+        failures = 0;
+    } else {
+        failures++;
+        if (failures >= max_failures) panic(T.error_mqtt);
+    }
+}
+
+void retain(const String& topic, const String& message) {
+    Serial.printf("%s %s\n", topic.c_str(), message.c_str());
+    mqtt.publish(topic, message, true, 0);
 }
 
 void setup() {
