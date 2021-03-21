@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <map>
 #include <vector>
 #include <list>
