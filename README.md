@@ -1,6 +1,6 @@
 # Operame
 
-Dit is de broncode van de firmware voor de [Operame CO2-meter](https://operame.nl/).
+Dit is de broncode van de firmware voor de [ControlCO2-meter](https://controlco2.space), operame project origineel gestart door RevSpace.
 
 ## Language
 
