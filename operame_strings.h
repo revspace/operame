@@ -26,6 +26,8 @@ struct Texts {
         *config_mqtt_interval,
         *config_mqtt_template,
         *config_template_info,
+        *config_sparkline,
+        *config_sparkline_buffer,
         *connecting,
         *wait
     ;
@@ -73,6 +75,8 @@ bool select(Texts& T, String language) {
         T.config_mqtt_interval = "Publication interval [s]";
         T.config_mqtt_template = "Message template";
         T.config_template_info = "The {} in the template is replaced by the measurement value.";
+        T.config_sparkline = "Show sparkline graph";
+        T.config_sparkline_buffer= "sparkline buffer length";
         T.connecting = "Connecting to WiFi...";
         T.portal_instructions = {
             {
@@ -139,6 +143,8 @@ bool select(Texts& T, String language) {
         T.config_mqtt_interval = "Publicatie-interval [s]";
         T.config_mqtt_template = "Berichtsjabloon";
         T.config_template_info = "De {} in het sjabloon wordt vervangen door de gemeten waarde.";
+        T.config_sparkline = "Laat grafiek zien";
+        T.config_sparkline_buffer= "grafiek buffer lengte";
         T.connecting = "Verbinden met WiFi...";
         T.portal_instructions = {
             {
