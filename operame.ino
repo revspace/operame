@@ -90,7 +90,7 @@ void display_lines(const std::list<String>& lines, int fg = TFT_WHITE, int bg = 
 void display_logo() {
     clear_sprite();
     sprite.setSwapBytes(true);
-    sprite.pushImage(12, 30, 215, 76, OPERAME_LOGO);
+    sprite.pushImage(0, 0, 240, 135, CONTROL_CO2_V2_240_135_LOGO);
     sprite.pushSprite(0, 0);
 }
 
