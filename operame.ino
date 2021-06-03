@@ -442,7 +442,8 @@ void loop() {
 
     every(5000) {
         co2 = get_co2();
-        Serial.println(co2);
+        Serial.print(co2);
+        Serial.println();
     }
 
     every(50) {
