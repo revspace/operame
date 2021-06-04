@@ -1,25 +1,29 @@
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <MQTT.h>
 #include <SPIFFS.h>
 #include <WiFiSettings.h>
 #include <MHZ19.h>
 #include <ArduinoOTA.h>
+#include <ArduinoJSON.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
 #include <logo.h>
 #include <list>
 #include <operame_strings.h>
+#include "Stream.h"
 
 #define LANGUAGE "nl"
 OperameLanguage::Texts T;
 
 enum Driver { AQC, MHZ };
-Driver          driver;
-MQTTClient      mqtt;
-HardwareSerial  hwserial1(1);
-TFT_eSPI        display;
-TFT_eSprite     sprite(&display);
-MHZ19           mhz;
+Driver            driver;
+MQTTClient        mqtt;
+HardwareSerial    hwserial1(1);
+TFT_eSPI          display;
+TFT_eSprite       sprite(&display);
+MHZ19             mhz;
+WiFiClientSecure  wificlient;
 
 const int       pin_portalbutton = 35;
 const int       pin_demobutton   = 0;
@@ -41,6 +45,15 @@ bool            add_units;
 bool            wifi_enabled;
 bool            mqtt_enabled;
 int             max_failures;
+
+// REST configuration via WiFiSettings
+unsigned long   rest_interval;
+int             rest_port;
+String          rest_domain;
+String          rest_uri;
+String          rest_resource_id;
+String          rest_cert;
+bool            rest_enabled;
 
 void retain(const String& topic, const String& message) {
     Serial.printf("%s %s\n", topic.c_str(), message.c_str());
@@ -392,6 +405,17 @@ void setup() {
     mqtt_template = WiFiSettings.string("operame_mqtt_template", "{} PPM", T.config_mqtt_template);
     WiFiSettings.info(T.config_template_info);
 
+    WiFiSettings.heading("REST");
+    rest_enabled            = WiFiSettings.checkbox("operame_rest", false, T.config_rest) && wifi_enabled;
+    rest_domain             = WiFiSettings.string("rest_domain", 150, "", T.config_rest_domain);
+    rest_uri                = WiFiSettings.string("rest_uri", 600, "", T.config_rest_uri);
+    rest_port               = WiFiSettings.integer("rest_port", 0, 65535, 443, T.config_rest_port);
+    rest_interval           = 1000UL * WiFiSettings.integer("operame_rest_interval", 10, 3600, 60 * 5, T.config_rest_interval);
+    rest_resource_id        = WiFiSettings.string("rest_resource_id", 64, "", T.config_rest_resource_id);
+    bool rest_cert_enabled  = WiFiSettings.checkbox("operame_rest_cert", false, T.config_rest_cert_enabled);
+    rest_cert        = WiFiSettings.string("rest_cert", 2000, "", T.config_rest_cert);
+    rest_cert.replace("\\n", "\n");
+
     WiFiSettings.onConnect = [] {
         display_big(T.connecting, TFT_BLUE);
         check_portalbutton();
@@ -429,10 +453,23 @@ void setup() {
 
     if (wifi_enabled) WiFiSettings.connect(false, 15);
 
-    static WiFiClient wificlient;
     if (mqtt_enabled) mqtt.begin(server.c_str(), port, wificlient);
 
+    if (rest_cert_enabled) wificlient.setCACert(rest_cert.c_str());
+
     if (ota_enabled) setup_ota();
+}
+
+void post_rest_message(DynamicJsonDocument message, Stream& stream) {
+    stream.println("POST " + rest_uri + " HTTP/1.1");
+    stream.println("Host: " + rest_domain);
+    stream.println("Content-Type: application/json");
+    stream.println("Connection: keep-alive");
+    stream.print("Content-Length: ");
+    stream.println(measureJson(message));
+    stream.println();
+    serializeJson(message, stream);
+    stream.println();
 }
 
 #define every(t) for (static unsigned long _lasttime; (unsigned long)((unsigned long)millis() - _lasttime) >= (t); _lasttime = millis())
@@ -464,6 +501,26 @@ void loop() {
             String message = mqtt_template;
             message.replace("{}", String(co2));
             retain(mqtt_topic, message);
+        }
+    }
+
+    if (rest_enabled) {
+        while(wificlient.available()){
+            String line = wificlient.readStringUntil('\r');
+            Serial.print(line);
+        }
+
+        every(rest_interval) {
+            if (co2 <= 0) break;
+
+            const size_t capacity = JSON_OBJECT_SIZE(2);
+            DynamicJsonDocument message(capacity);
+            message["co2"] = co2;
+            message["id"] = rest_resource_id.c_str();
+
+            if (wificlient.connected() || wificlient.connect(&rest_domain[0], rest_port)) {
+                post_rest_message(message, wificlient);
+            }
         }
     }
 

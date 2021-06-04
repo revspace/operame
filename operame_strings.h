@@ -26,6 +26,14 @@ struct Texts {
         *config_mqtt_interval,
         *config_mqtt_template,
         *config_template_info,
+        *config_rest,
+        *config_rest_domain,
+        *config_rest_uri,
+        *config_rest_port,
+        *config_rest_interval,
+        *config_rest_resource_id,
+        *config_rest_cert_enabled,
+        *config_rest_cert,
         *connecting,
         *wait
     ;
@@ -72,6 +80,14 @@ bool select(Texts& T, String language) {
         T.config_mqtt_topic = "Topic";  // probably should not be translated
         T.config_mqtt_interval = "Publication interval [s]";
         T.config_mqtt_template = "Message template";
+        T.config_rest = "Publish measurements via the HTTPS protocol";
+        T.config_rest_domain = "Domain";
+        T.config_rest_uri = "URI";
+        T.config_rest_port = "TCP Port";
+        T.config_rest_interval = "Publication interval [s]";
+        T.config_rest_resource_id = "ID of this device";
+        T.config_rest_cert_enabled = "Use CA root certificate";
+        T.config_rest_cert = "CA root certificat";
         T.config_template_info = "The {} in the template is replaced by the measurement value.";
         T.connecting = "Connecting to WiFi...";
         T.portal_instructions = {
@@ -138,6 +154,14 @@ bool select(Texts& T, String language) {
         T.config_mqtt_topic = "Topic";  // zo heet dat in MQTT
         T.config_mqtt_interval = "Publicatie-interval [s]";
         T.config_mqtt_template = "Berichtsjabloon";
+        T.config_rest = "Metingen via het HTTPS-protocol versturen";
+        T.config_rest_domain = "Domein";
+        T.config_rest_uri = "URI";
+        T.config_rest_port = "TCP-Poort";
+        T.config_rest_interval = "Publicatie-interval [s]";
+        T.config_rest_resource_id = "ID van dit apparaat";
+        T.config_rest_cert_enabled = "Gebruik een CA root certificaat";
+        T.config_rest_cert = "CA root certificaat";
         T.config_template_info = "De {} in het sjabloon wordt vervangen door de gemeten waarde.";
         T.connecting = "Verbinden met WiFi...";
         T.portal_instructions = {
