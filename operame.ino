@@ -9,8 +9,18 @@
 #include <logo.h>
 #include <list>
 #include <operame_strings.h>
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+//#include <DHT_U.h>
 
 #define LANGUAGE "nl"
+
+#define DHTPIN 15    // Digital pin connected to the DHT sensor
+// Uncomment the type of sensor in use:
+//#define DHTTYPE    DHT11     // DHT 11
+#define DHTTYPE    DHT22     // DHT 22 (AM2302)
+//#define DHTTYPE    DHT21     // DHT 21 (AM2301)
+
 OperameLanguage::Texts T;
 
 enum Driver { AQC, MHZ };
@@ -20,6 +30,7 @@ HardwareSerial  hwserial1(1);
 TFT_eSPI        display;
 TFT_eSprite     sprite(&display);
 MHZ19           mhz;
+DHT             dht(DHTPIN, DHTTYPE);
 
 const int       pin_portalbutton = 35;
 const int       pin_demobutton   = 0;
@@ -70,6 +81,21 @@ void display_big(const String& text, int fg = TFT_WHITE, int bg = TFT_BLACK) {
 
     sprite.pushSprite(0, 0);
 }
+void display_3(const String& co2, const String& temp, const String& hum, int fg = TFT_WHITE, int bg = TFT_BLACK) {
+    clear_sprite(bg);
+    sprite.setTextSize(1);
+    sprite.setTextFont(8);
+    sprite.setTextDatum(MC_DATUM);
+    sprite.setTextColor(fg, bg);
+    sprite.drawString(co2, display.width()/2, display.height()/2 - 25);
+    sprite.setTextFont(4);
+    sprite.setTextDatum(ML_DATUM);
+    sprite.drawString(temp, 10, display.height() - 15);
+    sprite.setTextDatum(MR_DATUM);
+    sprite.drawString(hum, display.width() - 10, display.height() - 15);
+
+    sprite.pushSprite(0, 0);
+}
 
 void display_lines(const std::list<String>& lines, int fg = TFT_WHITE, int bg = TFT_BLACK) {
     clear_sprite(bg);
@@ -111,6 +137,26 @@ void display_ppm(int ppm) {
         std::swap(fg, bg);
     }
     display_big(String(ppm), fg, bg);
+}
+
+void display_ppm_t_h(int ppm, float t, float h) {
+    int fg, bg;
+    if (ppm >= co2_critical) {
+        fg = TFT_WHITE;
+        bg = TFT_RED;
+    } else if (ppm >= co2_warning) {
+        fg = TFT_BLACK;
+        bg = TFT_YELLOW;
+    } else {
+        fg = TFT_GREEN;
+        bg = TFT_BLACK;
+    }
+
+    if (ppm >= co2_blink && millis() % 2000 < 1000) {
+        std::swap(fg, bg);
+    }
+
+    display_3(String(ppm), String(t), String(h), fg, bg);
 }
 
 void calibrate() {
@@ -369,7 +415,9 @@ void setup() {
         Serial.println("Using MHZ driver.");
     }
 
-
+    // Initialize DHT device.
+    dht.begin();
+    
     for (auto& str : T.portal_instructions[0]) {
         str.replace("{ssid}", WiFiSettings.hostname);
     }
@@ -439,10 +487,20 @@ void setup() {
 
 void loop() {
     static int co2;
+    static float h;
+    static float t;
 
     every(5000) {
+        // Read CO2, humidity and temperature 
         co2 = get_co2();
+        h = dht.readHumidity();
+        t = dht.readTemperature();
+        // Print data to serial port
         Serial.print(co2);
+        Serial.print(",");
+        Serial.print(t);
+        Serial.print(",");
+        Serial.print(h);
         Serial.println();
     }
 
@@ -452,8 +510,16 @@ void loop() {
         } else if (co2 == 0) {
             display_big(T.wait);
         } else {
-            // some MH-Z19's go to 10000 but the display has space for 4 digits
-            display_ppm(co2 > 9999 ? 9999 : co2);
+            // Check if there is a humidity sensor
+            if (isnan(h) || isnan(t)) {
+                Serial.println("Failed to read from DHT sensor!");
+                // Only display CO2 value (the old way)
+                // some MH-Z19's go to 10000 but the display has space for 4 digits
+                display_ppm(co2 > 9999 ? 9999 : co2);
+            } else {
+                // Display also humidity and temperature
+                display_ppm_t_h(co2 > 9999 ? 9999 : co2, t, h);
+            }
         }
     }
 
