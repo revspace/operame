@@ -26,6 +26,9 @@ struct Texts {
         *config_mqtt_interval,
         *config_mqtt_template,
         *config_template_info,
+	*config_mqtt_user_pass,
+	*config_mqtt_username,
+	*config_mqtt_password,
         *config_rest,
         *config_rest_domain,
         *config_rest_uri,
@@ -80,6 +83,9 @@ bool select(Texts& T, String language) {
         T.config_mqtt_topic = "Topic";  // probably should not be translated
         T.config_mqtt_interval = "Publication interval [s]";
         T.config_mqtt_template = "Message template";
+	T.config_mqtt_user_pass = "Enable username and password for MQTT";
+	T.config_mqtt_username = "Username MQTT";
+	T.config_mqtt_password = "Password MQTT";
         T.config_rest = "Publish measurements via the HTTPS protocol";
         T.config_rest_domain = "Domain";
         T.config_rest_uri = "URI";
@@ -154,6 +160,9 @@ bool select(Texts& T, String language) {
         T.config_mqtt_topic = "Topic";  // zo heet dat in MQTT
         T.config_mqtt_interval = "Publicatie-interval [s]";
         T.config_mqtt_template = "Berichtsjabloon";
+        T.config_mqtt_user_pass = "Activeer gebruikersnaam en paswoord voor MQTT";
+        T.config_mqtt_username = "Gebruikersnaam MQTT";
+        T.config_mqtt_password = "Paswoord MQTT";
         T.config_rest = "Metingen via het HTTPS-protocol versturen";
         T.config_rest_domain = "Domein";
         T.config_rest_uri = "URI";

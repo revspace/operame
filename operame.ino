@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <WiFiClient.h>
 #include <WiFiClientSecure.h>
 #include <MQTT.h>
 #include <SPIFFS.h>
@@ -35,7 +36,8 @@ HardwareSerial    hwserial1(1);
 TFT_eSPI          display;
 TFT_eSprite       sprite(&display);
 MHZ19             mhz;
-WiFiClientSecure  wificlient;
+WiFiClient	  wificlient;
+WiFiClientSecure  wificlientsecure;
 DHT             dht(DHTPIN, DHTTYPE);
 
 
@@ -55,6 +57,9 @@ int             co2_critical;
 int             co2_blink;
 String          mqtt_topic;
 String          mqtt_template;
+bool		mqtt_user_pass_enabled;
+String		mqtt_username;
+String		mqtt_password;
 bool            add_units;
 bool            wifi_enabled;
 bool            mqtt_enabled;
@@ -270,11 +275,22 @@ void connect_mqtt() {
     if (mqtt.connected()) return;  // already/still connected
 
     static int failures = 0;
-    if (mqtt.connect(WiFiSettings.hostname.c_str())) {
-        failures = 0;
-    } else {
-        failures++;
-        if (failures >= max_failures) panic(T.error_mqtt);
+    if( mqtt_user_pass_enabled ) {
+        if (mqtt.connect(WiFiSettings.hostname.c_str(), mqtt_username.c_str(), mqtt_password.c_str())) {
+            failures = 0;
+	    display_big("MQTT connect");
+        } else {
+            failures++;
+            if (failures >= max_failures) panic(T.error_mqtt);
+        }        
+    }
+    else {
+        if (mqtt.connect(WiFiSettings.hostname.c_str())) {
+            failures = 0;
+        } else {
+            failures++;
+            if (failures >= max_failures) panic(T.error_mqtt);
+        }
     }
 }
 
@@ -383,7 +399,7 @@ void set_zero() {
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("Operame start");
+    Serial.println("Operame / www.controlCO2.space start");
 
     digitalWrite(pin_backlight, HIGH);
     display.init();
@@ -455,6 +471,9 @@ void setup() {
     mqtt_interval = 1000UL * WiFiSettings.integer("operame_mqtt_interval", 10, 3600, 60, T.config_mqtt_interval);
     mqtt_template = WiFiSettings.string("operame_mqtt_template", "{} PPM", T.config_mqtt_template);
     WiFiSettings.info(T.config_template_info);
+    mqtt_user_pass_enabled = WiFiSettings.checkbox("operame_mqtt_user_pass", false, T.config_mqtt_user_pass);
+    mqtt_username = WiFiSettings.string("operame_mqtt_username", 64, "", T.config_mqtt_username);
+    mqtt_password = WiFiSettings.string("operame_mqtt_password", 64, "", T.config_mqtt_password);
 
     WiFiSettings.heading("REST");
     rest_enabled            = WiFiSettings.checkbox("operame_rest", false, T.config_rest) && wifi_enabled;
@@ -506,7 +525,7 @@ void setup() {
 
     if (mqtt_enabled) mqtt.begin(server.c_str(), port, wificlient);
 
-    if (rest_cert_enabled) wificlient.setCACert(rest_cert.c_str());
+    if (rest_cert_enabled) wificlientsecure.setCACert(rest_cert.c_str());
 
     if (ota_enabled) setup_ota();
 }
@@ -530,7 +549,7 @@ void loop() {
     static float h;
     static float t;
 
-    every(5000) {
+    every(60000) {
         // Read CO2, humidity and temperature 
         co2 = get_co2();
         h = dht.readHumidity();
@@ -575,8 +594,8 @@ void loop() {
     }
 
     if (rest_enabled) {
-        while(wificlient.available()){
-            String line = wificlient.readStringUntil('\r');
+        while(wificlientsecure.available()){
+            String line = wificlientsecure.readStringUntil('\r');
             Serial.print(line);
         }
 
@@ -588,8 +607,8 @@ void loop() {
             message["co2"] = co2;
             message["id"] = rest_resource_id.c_str();
 
-            if (wificlient.connected() || wificlient.connect(&rest_domain[0], rest_port)) {
-                post_rest_message(message, wificlient);
+            if (wificlientsecure.connected() || wificlientsecure.connect(&rest_domain[0], rest_port)) {
+                post_rest_message(message, wificlientsecure);
             }
         }
     }
