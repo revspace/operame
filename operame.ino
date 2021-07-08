@@ -40,7 +40,6 @@ WiFiClient	  wificlient;
 WiFiClientSecure  wificlientsecure;
 DHT             dht(DHTPIN, DHTTYPE);
 
-
 const int       pin_portalbutton = 35;
 const int       pin_demobutton   = 0;
 const int       pin_backlight    = 4;
@@ -56,10 +55,17 @@ int             co2_warning;
 int             co2_critical;
 int             co2_blink;
 String          mqtt_topic;
+bool		mqtt_template_enabled;
 String          mqtt_template;
 bool		mqtt_user_pass_enabled;
 String		mqtt_username;
 String		mqtt_password;
+bool		mqtt_temp_hum_enabled;
+String          mqtt_topic_temperature;
+bool 	        mqtt_template_temp_hum_enabled;
+String		mqtt_template_temp;
+String          mqtt_topic_humidity;
+String		mqtt_template_hum;
 bool            add_units;
 bool            wifi_enabled;
 bool            mqtt_enabled;
@@ -469,8 +475,15 @@ void setup() {
     max_failures  = WiFiSettings.integer("operame_max_failures", 0, 1000, 10, T.config_max_failures);
     mqtt_topic  = WiFiSettings.string("operame_mqtt_topic", WiFiSettings.hostname, T.config_mqtt_topic);
     mqtt_interval = 1000UL * WiFiSettings.integer("operame_mqtt_interval", 10, 3600, 60, T.config_mqtt_interval);
-    mqtt_template = WiFiSettings.string("operame_mqtt_template", "{} PPM", T.config_mqtt_template);
-    WiFiSettings.info(T.config_template_info);
+//    mqtt_template_enabled = WiFiSettings.checkbox("operame_mqtt_template_enabled", false, T.config_mqtt_template_enabled);
+//    mqtt_template = WiFiSettings.string("operame_mqtt_template", "{} PPM", T.config_mqtt_template);
+//    WiFiSettings.info(T.config_template_info);
+    mqtt_temp_hum_enabled = WiFiSettings.checkbox("operame_mqtt_temp_hum", false, T.config_mqtt_temp_hum);
+    mqtt_topic_temperature  = WiFiSettings.string("operame_mqtt_topic_temperature", WiFiSettings.hostname + "/t", T.config_mqtt_topic_temperature);
+    mqtt_topic_humidity  = WiFiSettings.string("operame_mqtt_topic_humidity", WiFiSettings.hostname + "/h", T.config_mqtt_topic_humidity);
+//    mqtt_template_temp_hum_enabled = WiFiSettings.checkbox("operame_mqtt_template_temp_hum_enabled", false, T.config_mqtt_template_temp_hum_enabled);
+//    mqtt_template_temp = WiFiSettings.string("operame_mqtt_template_temp", "{} C", T.config_mqtt_template_temp);
+//    mqtt_template_hum = WiFiSettings.string("operame_mqtt_template_hum", "{} %R.H.", T.config_mqtt_template_hum);
     mqtt_user_pass_enabled = WiFiSettings.checkbox("operame_mqtt_user_pass", false, T.config_mqtt_user_pass);
     mqtt_username = WiFiSettings.string("operame_mqtt_username", 64, "", T.config_mqtt_username);
     mqtt_password = WiFiSettings.string("operame_mqtt_password", 64, "", T.config_mqtt_password);
@@ -587,10 +600,46 @@ void loop() {
         every(mqtt_interval) {
             if (co2 <= 0) break;
             connect_mqtt();
-            String message = mqtt_template;
-            message.replace("{}", String(co2));
-            retain(mqtt_topic, message);
-        }
+	    //CO2
+	    String message;
+            const size_t capacity = JSON_OBJECT_SIZE(3);
+            DynamicJsonDocument doc(capacity);
+            doc["variable"] = "CO2";
+	    doc["value"] = co2;
+	    doc["unit"] = "ppm";
+ 	    serializeJson(doc, message);
+	    retain(mqtt_topic, message);
+
+	    //temperature
+	    if(isnan(t)) {
+		Serial.println("Failed to read from DHT sensor, so no MQTT publish");
+            } 
+            else {
+                String message;
+                const size_t capacity = JSON_OBJECT_SIZE(3);
+                DynamicJsonDocument doc(capacity);
+                doc["variable"] = "temperature";
+                doc["value"] = t;
+                doc["unit"] = "C";
+                serializeJson(doc, message);
+                retain(mqtt_topic, message);
+	    }
+
+	    //humidity
+            if(isnan(h)) {
+                Serial.println("Failed to read from DHT sensor, so no MQTT publish");
+            } 
+            else {
+                String message;
+                const size_t capacity = JSON_OBJECT_SIZE(3);
+                DynamicJsonDocument doc(capacity);
+                doc["variable"] = "humidity";
+                doc["value"] = h;
+                doc["unit"] = "%R.H.";
+                serializeJson(doc, message);
+                retain(mqtt_topic, message);
+            }	 
+	}
     }
 
     if (rest_enabled) {
