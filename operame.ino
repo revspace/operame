@@ -610,35 +610,37 @@ void loop() {
  	    serializeJson(doc, message);
 	    retain(mqtt_topic, message);
 
-	    //temperature
-	    if(isnan(t)) {
-		Serial.println("Failed to read from DHT sensor, so no MQTT publish");
-            } 
-            else {
-                String message;
-                const size_t capacity = JSON_OBJECT_SIZE(3);
-                DynamicJsonDocument doc(capacity);
-                doc["variable"] = "temperature";
-                doc["value"] = t;
-                doc["unit"] = "C";
-                serializeJson(doc, message);
-                retain(mqtt_topic, message);
-	    }
+	    if(mqtt_temp_hum_enabled) {
+	    	//temperature
+	    	if(isnan(t)) {
+			Serial.println("Failed to read from DHT sensor, so no MQTT publish");
+            	} 
+            	else {
+                	String message;
+                	const size_t capacity = JSON_OBJECT_SIZE(3);
+                	DynamicJsonDocument doc(capacity);
+                	doc["variable"] = "temperature";
+                	doc["value"] = t;
+                	doc["unit"] = "C";
+                	serializeJson(doc, message);
+                	retain(mqtt_topic, message);
+	    	}
 
-	    //humidity
-            if(isnan(h)) {
-                Serial.println("Failed to read from DHT sensor, so no MQTT publish");
-            } 
-            else {
-                String message;
-                const size_t capacity = JSON_OBJECT_SIZE(3);
-                DynamicJsonDocument doc(capacity);
-                doc["variable"] = "humidity";
-                doc["value"] = h;
-                doc["unit"] = "%R.H.";
-                serializeJson(doc, message);
-                retain(mqtt_topic, message);
-            }	 
+	    	//humidity
+            	if(isnan(h)) {
+                	Serial.println("Failed to read from DHT sensor, so no MQTT publish");
+            	} 
+            	else {
+                	String message;
+                	const size_t capacity = JSON_OBJECT_SIZE(3);
+                	DynamicJsonDocument doc(capacity);
+                	doc["variable"] = "humidity";
+                	doc["value"] = h;
+                	doc["unit"] = "%R.H.";
+                	serializeJson(doc, message);
+                	retain(mqtt_topic, message);
+            	}
+	    }	 
 	}
     }
 
