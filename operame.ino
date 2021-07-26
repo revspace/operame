@@ -623,7 +623,7 @@ void loop() {
                 	doc["value"] = t;
                 	doc["unit"] = "C";
                 	serializeJson(doc, message);
-                	retain(mqtt_topic, message);
+                	retain(mqtt_topic_temperature, message);
 	    	}
 
 	    	//humidity
@@ -638,7 +638,7 @@ void loop() {
                 	doc["value"] = h;
                 	doc["unit"] = "%R.H.";
                 	serializeJson(doc, message);
-                	retain(mqtt_topic, message);
+                	retain(mqtt_topic_humidity, message);
             	}
 	    }	 
 	}
