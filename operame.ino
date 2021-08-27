@@ -496,7 +496,7 @@ void setup() {
     rest_interval           = 1000UL * WiFiSettings.integer("operame_rest_interval", 10, 3600, 60 * 5, T.config_rest_interval);
     rest_resource_id        = WiFiSettings.string("rest_resource_id", 64, "", T.config_rest_resource_id);
     bool rest_cert_enabled  = WiFiSettings.checkbox("operame_rest_cert", false, T.config_rest_cert_enabled);
-    rest_cert        = WiFiSettings.string("rest_cert", 2000, "", T.config_rest_cert);
+    rest_cert        = WiFiSettings.string("rest_cert", 6000, "", T.config_rest_cert);
     rest_cert.replace("\\n", "\n");
 
     WiFiSettings.onConnect = [] {
