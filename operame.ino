@@ -584,7 +584,6 @@ void loop() {
         } else {
             // Check if there is a humidity sensor
             if (isnan(h) || isnan(t)) {
-                Serial.println("Failed to read from DHT sensor!");
                 // Only display CO2 value (the old way)
                 // some MH-Z19's go to 10000 but the display has space for 4 digits
                 display_ppm(co2 > 9999 ? 9999 : co2);
@@ -602,9 +601,9 @@ void loop() {
             connect_mqtt();
 	    //CO2
 	    String message;
-            const size_t capacity = JSON_OBJECT_SIZE(3);
-            DynamicJsonDocument doc(capacity);
-            doc["variable"] = "CO2";
+        const size_t capacity = JSON_OBJECT_SIZE(3);
+        DynamicJsonDocument doc(capacity);
+        doc["variable"] = "CO2";
 	    doc["value"] = co2;
 	    doc["unit"] = "ppm";
  	    serializeJson(doc, message);
@@ -612,34 +611,28 @@ void loop() {
 
 	    if(mqtt_temp_hum_enabled) {
 	    	//temperature
-	    	if(isnan(t)) {
-			Serial.println("Failed to read from DHT sensor, so no MQTT publish");
-            	} 
-            	else {
-                	String message;
-                	const size_t capacity = JSON_OBJECT_SIZE(3);
-                	DynamicJsonDocument doc(capacity);
-                	doc["variable"] = "temperature";
-                	doc["value"] = t;
-                	doc["unit"] = "C";
-                	serializeJson(doc, message);
-                	retain(mqtt_topic_temperature, message);
+	    	if(!isnan(t)) {
+                String message;
+                const size_t capacity = JSON_OBJECT_SIZE(3);
+                DynamicJsonDocument doc(capacity);
+                doc["variable"] = "temperature";
+                doc["value"] = t;
+                doc["unit"] = "C";
+                serializeJson(doc, message);
+                retain(mqtt_topic_temperature, message);
 	    	}
 
 	    	//humidity
-            	if(isnan(h)) {
-                	Serial.println("Failed to read from DHT sensor, so no MQTT publish");
-            	} 
-            	else {
-                	String message;
-                	const size_t capacity = JSON_OBJECT_SIZE(3);
-                	DynamicJsonDocument doc(capacity);
-                	doc["variable"] = "humidity";
-                	doc["value"] = h;
-                	doc["unit"] = "%R.H.";
-                	serializeJson(doc, message);
-                	retain(mqtt_topic_humidity, message);
-            	}
+            if(!isnan(h)) {
+                String message;
+                const size_t capacity = JSON_OBJECT_SIZE(3);
+                DynamicJsonDocument doc(capacity);
+                doc["variable"] = "humidity";
+                doc["value"] = h;
+                doc["unit"] = "%R.H.";
+                serializeJson(doc, message);
+                retain(mqtt_topic_humidity, message);
+            }
 	    }	 
 	}
     }
@@ -653,9 +646,11 @@ void loop() {
         every(rest_interval) {
             if (co2 <= 0) break;
 
-            const size_t capacity = JSON_OBJECT_SIZE(2);
+            const size_t capacity = JSON_OBJECT_SIZE(4);
             DynamicJsonDocument message(capacity);
             message["co2"] = co2;
+            message["temperature"] = t;
+            message["humidity"] = h;
             message["id"] = rest_resource_id.c_str();
 
             if (wificlientsecure.connected() || wificlientsecure.connect(&rest_domain[0], rest_port)) {
