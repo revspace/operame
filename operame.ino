@@ -6,7 +6,7 @@
 #include <WiFiSettings.h>
 #include <MHZ19.h>
 #include <ArduinoOTA.h>
-#include <ArduinoJSON.h>
+#include <ArduinoJson.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
 #include <logo.h>
