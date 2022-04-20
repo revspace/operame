@@ -183,7 +183,7 @@ void display_ppm_t_h(int ppm, float t, float h) {
         std::swap(fg, bg);
     }
 
-    display_3(String(ppm), String(t), String(h), fg, bg);
+    display_3(String(ppm), String(int(t)) + String("`C"), String(int(h)) + String("%"), fg, bg);
 }
 
 void calibrate() {
