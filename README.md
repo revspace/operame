@@ -37,3 +37,13 @@ https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers
 -bordje connecteren en in devices checken of driver er is anders cp210x driver van silicon lans installeren.
 
 -dan in platformio.ini upload_port en flags commenten. zoek port dan automatisch
+
+## 4MB or 16MB
+
+board = esp32thing
+board_build.partitions = default.csv
+
+If you have a 16MB TTGO T-Display board, you can change the env settings in the platformio.ini file.
+board = esp32thing_plus
+board_build.partitions = default_16MB.csv
+
