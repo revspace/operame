@@ -147,6 +147,13 @@ void display_logo() {
     sprite.pushSprite(0, 0);
 }
 
+void display_cal() {
+    int fg, bg;
+    fg = TFT_WHITE;
+    bg = TFT_BLACK;
+    display_big(String("E 01"), fg, bg);
+}
+
 void display_ppm(int ppm) {
     int fg, bg;
     if (ppm >= co2_critical) {
@@ -595,10 +602,33 @@ void loop() {
             if (isnan(h) || isnan(t)) {
                 // Only display CO2 value (the old way)
                 // some MH-Z19's go to 10000 but the display has space for 4 digits
-                display_ppm(co2 > 9999 ? 9999 : co2);
+                 if(co2 < 330 )
+                {
+                    display_cal(); 
+                }
+                else if(co2 < 400)
+                {
+                    display_ppm(co2 < 399 ? 399 : co2);
+                }
+                else if(co2 >= 400)
+                {
+                    display_ppm(co2 > 9999 ? 9999 : co2);
+                }
+
             } else {
+                if(co2 < 330)
+                {
+                    display_cal();
+                }
+                else if(co2 < 400)
+                {
+                    display_ppm_t_h(co2 < 399 ? 399 : co2, t, h);
+                }
                 // Display also humidity and temperature
-                display_ppm_t_h(co2 > 9999 ? 9999 : co2, t, h);
+                else if(co2 >= 400)
+                {
+                    display_ppm_t_h(co2 > 9999 ? 9999 : co2, t, h);
+                }
             }
         }
     }
