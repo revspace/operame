@@ -561,7 +561,16 @@ void loop() {
     static int co2;
     static float h;
     static float t;
+    static bool first_boot = true;
 
+    if(first_boot)
+    {
+        co2 = get_co2();
+        h = dht.readHumidity();
+        t = dht.readTemperature();        
+        first_boot = false;
+    }
+    
     every(60000) {
         // Read CO2, humidity and temperature 
         co2 = get_co2();
