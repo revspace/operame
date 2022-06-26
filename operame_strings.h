@@ -23,9 +23,27 @@ struct Texts {
         *config_mqtt_port,
         *config_max_failures,
         *config_mqtt_topic,
+	*config_mqtt_topic_temperature,
+	*config_mqtt_topic_humidity,
         *config_mqtt_interval,
+	*config_mqtt_template_enabled,
         *config_mqtt_template,
         *config_template_info,
+	*config_mqtt_temp_hum,
+	*config_mqtt_template_temp_hum_enabled,
+	*config_mqtt_template_temp,
+	*config_mqtt_template_hum,
+	*config_mqtt_user_pass,
+	*config_mqtt_username,
+	*config_mqtt_password,
+        *config_rest,
+        *config_rest_domain,
+        *config_rest_uri,
+        *config_rest_port,
+        *config_rest_interval,
+        *config_rest_resource_id,
+        *config_rest_cert_enabled,
+        *config_rest_cert,
         *connecting,
         *wait
     ;
@@ -69,9 +87,27 @@ bool select(Texts& T, String language) {
         T.config_mqtt_server = "Broker";  // probably should not be translated
         T.config_mqtt_port = "Broker TCP port";
         T.config_max_failures = "Number of failed connections before automatic restart";
-        T.config_mqtt_topic = "Topic";  // probably should not be translated
+        T.config_mqtt_topic = "Topic for CO2";  // probably should not be translated
+        T.config_mqtt_topic_temperature = "Topic for temperature (if available)";  // probably should not be translated
+        T.config_mqtt_topic_humidity = "Topic for humidity (if available)";  // probably should not be translated
         T.config_mqtt_interval = "Publication interval [s]";
-        T.config_mqtt_template = "Message template";
+	T.config_mqtt_template_enabled = "Enable this if you want to use your own MQTT message template for CO2";
+        T.config_mqtt_template = "Message template for CO2";
+	T.config_mqtt_user_pass = "Enable username and password for MQTT";
+	T.config_mqtt_username = "Username MQTT";
+	T.config_mqtt_password = "Password MQTT";
+	T.config_mqtt_temp_hum = "Enable MQTT publish of temperature and humidity (if available)";
+	T.config_mqtt_template_temp_hum_enabled = "Enable this if you want to use your own MQTT message template for temperature/humidity";
+	T.config_mqtt_template_temp = "Message template for temperature";
+        T.config_mqtt_template_hum = "Message template for humidity";
+        T.config_rest = "Publish measurements via the HTTPS protocol";
+        T.config_rest_domain = "Domain";
+        T.config_rest_uri = "URI";
+        T.config_rest_port = "TCP Port";
+        T.config_rest_interval = "Publication interval [s]";
+        T.config_rest_resource_id = "ID of this device";
+        T.config_rest_cert_enabled = "Use CA root certificate";
+        T.config_rest_cert = "CA root certificat";
         T.config_template_info = "The {} in the template is replaced by the measurement value.";
         T.connecting = "Connecting to WiFi...";
         T.portal_instructions = {
@@ -135,9 +171,27 @@ bool select(Texts& T, String language) {
         T.config_mqtt_server = "Broker";  // zo heet dat in MQTT
         T.config_mqtt_port = "Broker TCP-poort";
         T.config_max_failures = "Aantal verbindingsfouten voor automatische herstart";
-        T.config_mqtt_topic = "Topic";  // zo heet dat in MQTT
+        T.config_mqtt_topic = "Topic voor CO2";  // zo heet dat in MQTT
+        T.config_mqtt_topic_temperature = "Topic voor temperatuur (indien beschikbaar)";  // probably should not be translated
+        T.config_mqtt_topic_humidity = "Topic voor rel. luchtvochtigheid (indien beschikbaar)";  // probably should not be translated
         T.config_mqtt_interval = "Publicatie-interval [s]";
-        T.config_mqtt_template = "Berichtsjabloon";
+        T.config_mqtt_template_enabled = "Activeer dit indien je jouw eigen MQTT berichtsjabloon voor CO2 wil gebruiken";
+        T.config_mqtt_template = "Berichtsjabloon voor CO2";
+        T.config_mqtt_user_pass = "Activeer gebruikersnaam en paswoord voor MQTT";
+        T.config_mqtt_username = "Gebruikersnaam MQTT";
+        T.config_mqtt_password = "Paswoord MQTT";
+	T.config_mqtt_temp_hum = "Activeer MQTT publicatie van temperatuur en rel. luchtvochtigheid (indien beschikbaar)";
+        T.config_mqtt_template_temp_hum_enabled = "Activeer dit indien je jouw eigen MQTT berichtsjabloon voor temperatuur/rel. luchtvochtigheid wil gebruiken";
+        T.config_mqtt_template_temp = "Berichtsjabloon voor temperatuur";
+        T.config_mqtt_template_hum = "Berichtsjabloon voor rel. luchtvochtigheid";
+        T.config_rest = "Metingen via het HTTPS-protocol versturen";
+        T.config_rest_domain = "Domein";
+        T.config_rest_uri = "URI";
+        T.config_rest_port = "TCP-Poort";
+        T.config_rest_interval = "Publicatie-interval [s]";
+        T.config_rest_resource_id = "ID van dit apparaat";
+        T.config_rest_cert_enabled = "Gebruik een CA root certificaat";
+        T.config_rest_cert = "CA root certificaat";
         T.config_template_info = "De {} in het sjabloon wordt vervangen door de gemeten waarde.";
         T.connecting = "Verbinden met WiFi...";
         T.portal_instructions = {

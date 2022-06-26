@@ -1,25 +1,44 @@
 #include <WiFi.h>
+#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
 #include <MQTT.h>
 #include <SPIFFS.h>
 #include <WiFiSettings.h>
 #include <MHZ19.h>
 #include <ArduinoOTA.h>
+#include <ArduinoJson.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
 #include <logo.h>
 #include <list>
 #include <operame_strings.h>
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+//#include <DHT_U.h>
+#include "Stream.h"
+
 
 #define LANGUAGE "nl"
+
+#define DHTPIN 15    // Digital pin connected to the DHT sensor
+// Uncomment the type of sensor in use:
+//#define DHTTYPE    DHT11     // DHT 11
+#define DHTTYPE    DHT22     // DHT 22 (AM2302)
+//#define DHTTYPE    DHT21     // DHT 21 (AM2301)
+
 OperameLanguage::Texts T;
 
 enum Driver { AQC, MHZ };
-Driver          driver;
-MQTTClient      mqtt;
-HardwareSerial  hwserial1(1);
-TFT_eSPI        display;
-TFT_eSprite     sprite(&display);
-MHZ19           mhz;
+
+Driver            driver;
+MQTTClient        mqtt;
+HardwareSerial    hwserial1(1);
+TFT_eSPI          display;
+TFT_eSprite       sprite(&display);
+MHZ19             mhz;
+WiFiClient	  wificlient;
+WiFiClientSecure  wificlientsecure;
+DHT             dht(DHTPIN, DHTTYPE);
 
 const int       pin_portalbutton = 35;
 const int       pin_demobutton   = 0;
@@ -36,11 +55,30 @@ int             co2_warning;
 int             co2_critical;
 int             co2_blink;
 String          mqtt_topic;
+bool		mqtt_template_enabled;
 String          mqtt_template;
+bool		mqtt_user_pass_enabled;
+String		mqtt_username;
+String		mqtt_password;
+bool		mqtt_temp_hum_enabled;
+String          mqtt_topic_temperature;
+bool 	        mqtt_template_temp_hum_enabled;
+String		mqtt_template_temp;
+String          mqtt_topic_humidity;
+String		mqtt_template_hum;
 bool            add_units;
 bool            wifi_enabled;
 bool            mqtt_enabled;
 int             max_failures;
+
+// REST configuration via WiFiSettings
+unsigned long   rest_interval;
+int             rest_port;
+String          rest_domain;
+String          rest_uri;
+String          rest_resource_id;
+String          rest_cert;
+bool            rest_enabled;
 
 void retain(const String& topic, const String& message) {
     Serial.printf("%s %s\n", topic.c_str(), message.c_str());
@@ -70,6 +108,21 @@ void display_big(const String& text, int fg = TFT_WHITE, int bg = TFT_BLACK) {
 
     sprite.pushSprite(0, 0);
 }
+void display_3(const String& co2, const String& temp, const String& hum, int fg = TFT_WHITE, int bg = TFT_BLACK) {
+    clear_sprite(bg);
+    sprite.setTextSize(1);
+    sprite.setTextFont(8);
+    sprite.setTextDatum(MC_DATUM);
+    sprite.setTextColor(fg, bg);
+    sprite.drawString(co2, display.width()/2, display.height()/2 - 25);
+    sprite.setTextFont(4);
+    sprite.setTextDatum(ML_DATUM);
+    sprite.drawString(temp, 10, display.height() - 15);
+    sprite.setTextDatum(MR_DATUM);
+    sprite.drawString(hum, display.width() - 10, display.height() - 15);
+
+    sprite.pushSprite(0, 0);
+}
 
 void display_lines(const std::list<String>& lines, int fg = TFT_WHITE, int bg = TFT_BLACK) {
     clear_sprite(bg);
@@ -90,8 +143,15 @@ void display_lines(const std::list<String>& lines, int fg = TFT_WHITE, int bg = 
 void display_logo() {
     clear_sprite();
     sprite.setSwapBytes(true);
-    sprite.pushImage(12, 30, 215, 76, OPERAME_LOGO);
+    sprite.pushImage(0, 0, 240, 135, CONTROL_CO2_V2_240_135_LOGO);
     sprite.pushSprite(0, 0);
+}
+
+void display_cal() {
+    int fg, bg;
+    fg = TFT_WHITE;
+    bg = TFT_BLACK;
+    display_big(String("E 01"), fg, bg);
 }
 
 void display_ppm(int ppm) {
@@ -111,6 +171,26 @@ void display_ppm(int ppm) {
         std::swap(fg, bg);
     }
     display_big(String(ppm), fg, bg);
+}
+
+void display_ppm_t_h(int ppm, float t, float h) {
+    int fg, bg;
+    if (ppm >= co2_critical) {
+        fg = TFT_WHITE;
+        bg = TFT_RED;
+    } else if (ppm >= co2_warning) {
+        fg = TFT_BLACK;
+        bg = TFT_YELLOW;
+    } else {
+        fg = TFT_GREEN;
+        bg = TFT_BLACK;
+    }
+
+    if (ppm >= co2_blink && millis() % 2000 < 1000) {
+        std::swap(fg, bg);
+    }
+
+    display_3(String(ppm), String(int(t)) + String("`C"), String(int(h)) + String("%"), fg, bg);
 }
 
 void calibrate() {
@@ -208,11 +288,22 @@ void connect_mqtt() {
     if (mqtt.connected()) return;  // already/still connected
 
     static int failures = 0;
-    if (mqtt.connect(WiFiSettings.hostname.c_str())) {
-        failures = 0;
-    } else {
-        failures++;
-        if (failures >= max_failures) panic(T.error_mqtt);
+    if( mqtt_user_pass_enabled ) {
+        if (mqtt.connect(WiFiSettings.hostname.c_str(), mqtt_username.c_str(), mqtt_password.c_str())) {
+            failures = 0;
+	    display_big("MQTT connect");
+        } else {
+            failures++;
+            if (failures >= max_failures) panic(T.error_mqtt);
+        }        
+    }
+    else {
+        if (mqtt.connect(WiFiSettings.hostname.c_str())) {
+            failures = 0;
+        } else {
+            failures++;
+            if (failures >= max_failures) panic(T.error_mqtt);
+        }
     }
 }
 
@@ -321,7 +412,7 @@ void set_zero() {
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("Operame start");
+    Serial.println("Operame / www.controlCO2.space start");
 
     digitalWrite(pin_backlight, HIGH);
     display.init();
@@ -369,7 +460,9 @@ void setup() {
         Serial.println("Using MHZ driver.");
     }
 
-
+    // Initialize DHT device.
+    dht.begin();
+    
     for (auto& str : T.portal_instructions[0]) {
         str.replace("{ssid}", WiFiSettings.hostname);
     }
@@ -389,8 +482,29 @@ void setup() {
     max_failures  = WiFiSettings.integer("operame_max_failures", 0, 1000, 10, T.config_max_failures);
     mqtt_topic  = WiFiSettings.string("operame_mqtt_topic", WiFiSettings.hostname, T.config_mqtt_topic);
     mqtt_interval = 1000UL * WiFiSettings.integer("operame_mqtt_interval", 10, 3600, 60, T.config_mqtt_interval);
-    mqtt_template = WiFiSettings.string("operame_mqtt_template", "{} PPM", T.config_mqtt_template);
-    WiFiSettings.info(T.config_template_info);
+//    mqtt_template_enabled = WiFiSettings.checkbox("operame_mqtt_template_enabled", false, T.config_mqtt_template_enabled);
+//    mqtt_template = WiFiSettings.string("operame_mqtt_template", "{} PPM", T.config_mqtt_template);
+//    WiFiSettings.info(T.config_template_info);
+    mqtt_temp_hum_enabled = WiFiSettings.checkbox("operame_mqtt_temp_hum", false, T.config_mqtt_temp_hum);
+    mqtt_topic_temperature  = WiFiSettings.string("operame_mqtt_topic_temperature", WiFiSettings.hostname + "/t", T.config_mqtt_topic_temperature);
+    mqtt_topic_humidity  = WiFiSettings.string("operame_mqtt_topic_humidity", WiFiSettings.hostname + "/h", T.config_mqtt_topic_humidity);
+//    mqtt_template_temp_hum_enabled = WiFiSettings.checkbox("operame_mqtt_template_temp_hum_enabled", false, T.config_mqtt_template_temp_hum_enabled);
+//    mqtt_template_temp = WiFiSettings.string("operame_mqtt_template_temp", "{} C", T.config_mqtt_template_temp);
+//    mqtt_template_hum = WiFiSettings.string("operame_mqtt_template_hum", "{} %R.H.", T.config_mqtt_template_hum);
+    mqtt_user_pass_enabled = WiFiSettings.checkbox("operame_mqtt_user_pass", false, T.config_mqtt_user_pass);
+    mqtt_username = WiFiSettings.string("operame_mqtt_username", 64, "", T.config_mqtt_username);
+    mqtt_password = WiFiSettings.string("operame_mqtt_password", 64, "", T.config_mqtt_password);
+
+    WiFiSettings.heading("REST");
+    rest_enabled            = WiFiSettings.checkbox("operame_rest", false, T.config_rest) && wifi_enabled;
+    rest_domain             = WiFiSettings.string("rest_domain", 150, "", T.config_rest_domain);
+    rest_uri                = WiFiSettings.string("rest_uri", 600, "", T.config_rest_uri);
+    rest_port               = WiFiSettings.integer("rest_port", 0, 65535, 443, T.config_rest_port);
+    rest_interval           = 1000UL * WiFiSettings.integer("operame_rest_interval", 10, 3600, 60 * 5, T.config_rest_interval);
+    rest_resource_id        = WiFiSettings.string("rest_resource_id", 64, "", T.config_rest_resource_id);
+    bool rest_cert_enabled  = WiFiSettings.checkbox("operame_rest_cert", false, T.config_rest_cert_enabled);
+    rest_cert        = WiFiSettings.string("rest_cert", 6000, "", T.config_rest_cert);
+    rest_cert.replace("\\n", "\n");
 
     WiFiSettings.onConnect = [] {
         display_big(T.connecting, TFT_BLUE);
@@ -429,20 +543,53 @@ void setup() {
 
     if (wifi_enabled) WiFiSettings.connect(false, 15);
 
-    static WiFiClient wificlient;
     if (mqtt_enabled) mqtt.begin(server.c_str(), port, wificlient);
 
+    if (rest_cert_enabled) wificlientsecure.setCACert(rest_cert.c_str());
+
     if (ota_enabled) setup_ota();
+}
+
+void post_rest_message(DynamicJsonDocument message, Stream& stream) {
+    stream.println("POST " + rest_uri + " HTTP/1.1");
+    stream.println("Host: " + rest_domain);
+    stream.println("Content-Type: application/json");
+    stream.println("Connection: keep-alive");
+    stream.print("Content-Length: ");
+    stream.println(measureJson(message));
+    stream.println();
+    serializeJson(message, stream);
+    stream.println();
 }
 
 #define every(t) for (static unsigned long _lasttime; (unsigned long)((unsigned long)millis() - _lasttime) >= (t); _lasttime = millis())
 
 void loop() {
     static int co2;
+    static float h;
+    static float t;
+    static bool first_boot = true;
 
-    every(5000) {
+    if(first_boot)
+    {
         co2 = get_co2();
-        Serial.println(co2);
+        h = dht.readHumidity();
+        t = dht.readTemperature();        
+        first_boot = false;
+    }
+    
+    every(60000) {
+        // Read CO2, humidity and temperature 
+        co2 = get_co2();
+        h = dht.readHumidity();
+        t = dht.readTemperature();
+        // Print data to serial port
+        Serial.print(co2);
+        Serial.print(",");
+        Serial.print(t);
+        Serial.print(",");
+        Serial.print(h);
+        Serial.println();
     }
 
     every(50) {
@@ -451,8 +598,38 @@ void loop() {
         } else if (co2 == 0) {
             display_big(T.wait);
         } else {
-            // some MH-Z19's go to 10000 but the display has space for 4 digits
-            display_ppm(co2 > 9999 ? 9999 : co2);
+            // Check if there is a humidity sensor
+            if (isnan(h) || isnan(t)) {
+                // Only display CO2 value (the old way)
+                // some MH-Z19's go to 10000 but the display has space for 4 digits
+                 if(co2 < 330 )
+                {
+                    display_cal(); 
+                }
+                else if(co2 < 400)
+                {
+                    display_ppm(co2 < 399 ? 399 : co2);
+                }
+                else if(co2 >= 400)
+                {
+                    display_ppm(co2 > 9999 ? 9999 : co2);
+                }
+
+            } else {
+                if(co2 < 330)
+                {
+                    display_cal();
+                }
+                else if(co2 < 400)
+                {
+                    display_ppm_t_h(co2 < 399 ? 399 : co2, t, h);
+                }
+                // Display also humidity and temperature
+                else if(co2 >= 400)
+                {
+                    display_ppm_t_h(co2 > 9999 ? 9999 : co2, t, h);
+                }
+            }
         }
     }
 
@@ -461,9 +638,63 @@ void loop() {
         every(mqtt_interval) {
             if (co2 <= 0) break;
             connect_mqtt();
-            String message = mqtt_template;
-            message.replace("{}", String(co2));
-            retain(mqtt_topic, message);
+	    //CO2
+	    String message;
+        const size_t capacity = JSON_OBJECT_SIZE(3);
+        DynamicJsonDocument doc(capacity);
+        doc["variable"] = "CO2";
+	    doc["value"] = co2;
+	    doc["unit"] = "ppm";
+ 	    serializeJson(doc, message);
+	    retain(mqtt_topic, message);
+
+	    if(mqtt_temp_hum_enabled) {
+	    	//temperature
+	    	if(!isnan(t)) {
+                String message;
+                const size_t capacity = JSON_OBJECT_SIZE(3);
+                DynamicJsonDocument doc(capacity);
+                doc["variable"] = "temperature";
+                doc["value"] = t;
+                doc["unit"] = "C";
+                serializeJson(doc, message);
+                retain(mqtt_topic_temperature, message);
+	    	}
+
+	    	//humidity
+            if(!isnan(h)) {
+                String message;
+                const size_t capacity = JSON_OBJECT_SIZE(3);
+                DynamicJsonDocument doc(capacity);
+                doc["variable"] = "humidity";
+                doc["value"] = h;
+                doc["unit"] = "%R.H.";
+                serializeJson(doc, message);
+                retain(mqtt_topic_humidity, message);
+            }
+	    }	 
+	}
+    }
+
+    if (rest_enabled) {
+        while(wificlientsecure.available()){
+            String line = wificlientsecure.readStringUntil('\r');
+            Serial.print(line);
+        }
+
+        every(rest_interval) {
+            if (co2 <= 0) break;
+
+            const size_t capacity = JSON_OBJECT_SIZE(4);
+            DynamicJsonDocument message(capacity);
+            message["co2"] = co2;
+            message["temperature"] = t;
+            message["humidity"] = h;
+            message["id"] = rest_resource_id.c_str();
+
+            if (wificlientsecure.connected() || wificlientsecure.connect(&rest_domain[0], rest_port)) {
+                post_rest_message(message, wificlientsecure);
+            }
         }
     }
 
